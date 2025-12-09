@@ -1,0 +1,205 @@
+/**
+ * Main Menu Screen
+ * Entry point of the game with level selection and shop
+ */
+
+import React from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  ScrollView
+} from 'react-native';
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
+import Constants from 'expo-constants';
+import { LEVELS, getTotalLevels } from '../config/levels';
+import { useGameState } from '../hooks/useGameState';
+
+const BANNER_AD_ID = Constants.expoConfig?.extra?.admobBannerId || TestIds.BANNER;
+
+interface MenuScreenProps {
+  onStartLevel: (levelId: number) => void;
+  onOpenShop: () => void;
+}
+
+export const MenuScreen: React.FC<MenuScreenProps> = ({ onStartLevel, onOpenShop }) => {
+  const { state } = useGameState();
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Game Title</Text>
+          <Text style={styles.subtitle}>Select a Level</Text>
+        </View>
+
+        {/* Player Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Lives</Text>
+            <Text style={styles.statValue}>❤️ {state.lives}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Coins</Text>
+            <Text style={styles.statValue}>🪙 {state.coins}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>High Score</Text>
+            <Text style={styles.statValue}>⭐ {state.highScore}</Text>
+          </View>
+        </View>
+
+        {/* Level Selection */}
+        <View style={styles.levelsContainer}>
+          {LEVELS.map((level) => {
+            const isCompleted = state.completedLevels.includes(level.id);
+            const isLocked = level.id > 1 && !state.completedLevels.includes(level.id - 1);
+
+            return (
+              <TouchableOpacity
+                key={level.id}
+                style={[
+                  styles.levelButton,
+                  isLocked && styles.levelButtonLocked
+                ]}
+                onPress={() => !isLocked && onStartLevel(level.id)}
+                disabled={isLocked}
+              >
+                <View style={styles.levelInfo}>
+                  <Text style={styles.levelNumber}>Level {level.id}</Text>
+                  <Text style={styles.levelName}>{level.name}</Text>
+                  <Text style={styles.levelDifficulty}>
+                    {level.difficulty.toUpperCase()}
+                  </Text>
+                </View>
+                {isCompleted && <Text style={styles.completedBadge}>✓</Text>}
+                {isLocked && <Text style={styles.lockedBadge}>🔒</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Shop Button */}
+        <TouchableOpacity style={styles.shopButton} onPress={onOpenShop}>
+          <Text style={styles.shopButtonText}>🛒 Shop</Text>
+        </TouchableOpacity>
+
+        {/* Ad Banner */}
+        <View style={styles.adContainer}>
+          <BannerAd
+            unitId={BANNER_AD_ID}
+            size={BannerAdSize.BANNER}
+            requestOptions={{
+              requestNonPersonalizedAdsOnly: true
+            }}
+          />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a2e'
+  },
+  scrollContent: {
+    padding: 20
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 30,
+    marginTop: 20
+  },
+  title: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 10
+  },
+  subtitle: {
+    fontSize: 20,
+    color: '#ccc'
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 30,
+    backgroundColor: '#16213e',
+    padding: 15,
+    borderRadius: 10
+  },
+  statItem: {
+    alignItems: 'center'
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 5
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff'
+  },
+  levelsContainer: {
+    marginBottom: 20
+  },
+  levelButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#0f3460',
+    padding: 20,
+    borderRadius: 10,
+    marginBottom: 10
+  },
+  levelButtonLocked: {
+    opacity: 0.5
+  },
+  levelInfo: {
+    flex: 1
+  },
+  levelNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 5
+  },
+  levelName: {
+    fontSize: 16,
+    color: '#ccc',
+    marginBottom: 5
+  },
+  levelDifficulty: {
+    fontSize: 12,
+    color: '#e94560'
+  },
+  completedBadge: {
+    fontSize: 30,
+    color: '#4ecca3'
+  },
+  lockedBadge: {
+    fontSize: 30
+  },
+  shopButton: {
+    backgroundColor: '#e94560',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  shopButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff'
+  },
+  adContainer: {
+    alignItems: 'center',
+    marginTop: 20
+  }
+});

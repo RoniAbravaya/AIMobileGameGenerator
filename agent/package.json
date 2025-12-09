@@ -1,0 +1,59 @@
+{
+  "name": "ai-game-generator-agent",
+  "version": "1.0.0",
+  "description": "AI orchestrator for automated mobile game generation and deployment",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "dev": "tsx src/cli.ts",
+    "test": "jest",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "generate": "npm run dev -- generate-game",
+    "deploy": "npm run dev -- deploy-game",
+    "analyze": "npm run dev -- analyze-performance",
+    "extend": "npm run dev -- extend-game",
+    "sunset": "npm run dev -- sunset-games"
+  },
+  "keywords": [
+    "ai",
+    "game",
+    "automation",
+    "expo",
+    "react-native",
+    "mobile"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@octokit/rest": "^20.0.2",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "googleapis": "^128.0.0",
+    "chalk": "^5.3.0",
+    "ora": "^7.0.1",
+    "prompts": "^2.4.2",
+    "execa": "^8.0.1",
+    "fs-extra": "^11.2.0",
+    "simple-git": "^3.21.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.4",
+    "@types/fs-extra": "^11.0.4",
+    "@types/prompts": "^2.4.9",
+    "@types/uuid": "^9.0.7",
+    "@typescript-eslint/eslint-plugin": "^6.13.2",
+    "@typescript-eslint/parser": "^6.13.2",
+    "eslint": "^8.55.0",
+    "jest": "^29.7.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
