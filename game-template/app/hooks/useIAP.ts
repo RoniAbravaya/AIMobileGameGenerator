@@ -1,29 +1,21 @@
 /**
  * In-App Purchase integration hook
  * Manages coin and life purchases
+ * Note: IAP is disabled in development/Expo Go - it only works in production builds
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import {
-  initConnection,
-  endConnection,
-  getProducts,
-  requestPurchase,
-  purchaseUpdatedListener,
-  purchaseErrorListener,
-  finishTransaction,
-  Product,
-  Purchase,
-  PurchaseError
-} from 'react-native-iap';
+import { useState, useCallback } from 'react';
 
-// Product SKUs
-const PRODUCT_SKUS = [
-  'coins_50',
-  'coins_100',
-  'coins_500',
-  'lives_5'
-];
+// IAP is disabled by default - enable in production builds with native modules
+const IAP_ENABLED = false;
+
+export interface Product {
+  productId: string;
+  title: string;
+  description: string;
+  price: string;
+  localizedPrice: string;
+}
 
 export interface PurchaseResult {
   success: boolean;
@@ -33,126 +25,65 @@ export interface PurchaseResult {
   error?: string;
 }
 
+// Mock products for development
+const MOCK_PRODUCTS: Product[] = [
+  { productId: 'coins_50', title: '50 Coins', description: 'Get 50 coins', price: '0.99', localizedPrice: '$0.99' },
+  { productId: 'coins_100', title: '100 Coins', description: 'Get 100 coins', price: '1.99', localizedPrice: '$1.99' },
+  { productId: 'coins_500', title: '500 Coins', description: 'Get 500 coins', price: '4.99', localizedPrice: '$4.99' },
+  { productId: 'lives_5', title: '5 Lives', description: 'Get 5 extra lives', price: '0.99', localizedPrice: '$0.99' },
+];
+
 export const useIAP = () => {
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products] = useState<Product[]>(MOCK_PRODUCTS);
   const [isPurchasing, setIsPurchasing] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitialized] = useState(!IAP_ENABLED); // Always "initialized" in dev mode
 
-  // Initialize IAP connection
-  useEffect(() => {
-    let purchaseUpdateSubscription: any;
-    let purchaseErrorSubscription: any;
-
-    const initIAP = async () => {
-      try {
-        await initConnection();
-        setIsInitialized(true);
-
-        // Get available products
-        const productList = await getProducts({ skus: PRODUCT_SKUS });
-        setProducts(productList);
-
-        // Listen for purchase updates
-        purchaseUpdateSubscription = purchaseUpdatedListener(
-          async (purchase: Purchase) => {
-            const receipt = purchase.transactionReceipt;
-            if (receipt) {
-              try {
-                // Acknowledge the purchase
-                await finishTransaction({ purchase, isConsumable: true });
-                setIsPurchasing(false);
-              } catch (error) {
-                console.error('Failed to finish transaction:', error);
-              }
-            }
-          }
-        );
-
-        // Listen for purchase errors
-        purchaseErrorSubscription = purchaseErrorListener(
-          (error: PurchaseError) => {
-            console.error('Purchase error:', error);
-            setIsPurchasing(false);
-          }
-        );
-      } catch (error) {
-        console.error('Failed to initialize IAP:', error);
-        setIsInitialized(false);
-      }
-    };
-
-    initIAP();
-
-    return () => {
-      if (purchaseUpdateSubscription) {
-        purchaseUpdateSubscription.remove();
-      }
-      if (purchaseErrorSubscription) {
-        purchaseErrorSubscription.remove();
-      }
-      endConnection();
-    };
-  }, []);
-
-  // Purchase coins
+  // Purchase coins (mock in development)
   const purchaseCoins = useCallback(async (sku: string): Promise<PurchaseResult> => {
-    if (!isInitialized) {
-      return { success: false, error: 'IAP not initialized' };
-    }
-
-    setIsPurchasing(true);
-
-    try {
-      await requestPurchase({ sku });
-
-      // Determine coins based on SKU
+    if (!IAP_ENABLED) {
+      console.log('[IAP] Purchases disabled in development mode');
+      setIsPurchasing(true);
+      
+      // Simulate purchase delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       let coins = 0;
       if (sku === 'coins_50') coins = 50;
       else if (sku === 'coins_100') coins = 100;
       else if (sku === 'coins_500') coins = 500;
 
       setIsPurchasing(false);
-
+      
       return {
         success: true,
         productId: sku,
         coins
       };
-    } catch (error: any) {
-      setIsPurchasing(false);
-      return {
-        success: false,
-        error: error.message || 'Purchase failed'
-      };
     }
-  }, [isInitialized]);
 
-  // Purchase lives
+    return { success: false, error: 'IAP not available' };
+  }, []);
+
+  // Purchase lives (mock in development)
   const purchaseLives = useCallback(async (): Promise<PurchaseResult> => {
-    if (!isInitialized) {
-      return { success: false, error: 'IAP not initialized' };
-    }
-
-    setIsPurchasing(true);
-
-    try {
-      await requestPurchase({ sku: 'lives_5' });
-
+    if (!IAP_ENABLED) {
+      console.log('[IAP] Purchases disabled in development mode');
+      setIsPurchasing(true);
+      
+      // Simulate purchase delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       setIsPurchasing(false);
-
+      
       return {
         success: true,
         productId: 'lives_5',
         lives: 5
       };
-    } catch (error: any) {
-      setIsPurchasing(false);
-      return {
-        success: false,
-        error: error.message || 'Purchase failed'
-      };
     }
-  }, [isInitialized]);
+
+    return { success: false, error: 'IAP not available' };
+  }, []);
 
   // Get product by SKU
   const getProduct = useCallback((sku: string): Product | undefined => {

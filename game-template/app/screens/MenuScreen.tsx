@@ -12,19 +12,15 @@ import {
   SafeAreaView,
   ScrollView
 } from 'react-native';
-import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
-import Constants from 'expo-constants';
-import { LEVELS, getTotalLevels } from '../config/levels';
+import { LEVELS } from '../config/levels';
 import { useGameState } from '../hooks/useGameState';
-
-const BANNER_AD_ID = Constants.expoConfig?.extra?.admobBannerId || TestIds.BANNER;
 
 interface MenuScreenProps {
   onStartLevel: (levelId: number) => void;
   onOpenShop: () => void;
 }
 
-export const MenuScreen: React.FC<MenuScreenProps> = ({ onStartLevel, onOpenShop }) => {
+const MenuScreen: React.FC<MenuScreenProps> = ({ onStartLevel, onOpenShop }) => {
   const { state } = useGameState();
 
   return (
@@ -87,15 +83,11 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({ onStartLevel, onOpenShop
           <Text style={styles.shopButtonText}>🛒 Shop</Text>
         </TouchableOpacity>
 
-        {/* Ad Banner */}
+        {/* Ad Banner Placeholder - Enable in production builds */}
         <View style={styles.adContainer}>
-          <BannerAd
-            unitId={BANNER_AD_ID}
-            size={BannerAdSize.BANNER}
-            requestOptions={{
-              requestNonPersonalizedAdsOnly: true
-            }}
-          />
+          <View style={styles.adPlaceholder}>
+            <Text style={styles.adPlaceholderText}>Ad Space</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -201,5 +193,22 @@ const styles = StyleSheet.create({
   adContainer: {
     alignItems: 'center',
     marginTop: 20
+  },
+  adPlaceholder: {
+    width: 320,
+    height: 50,
+    backgroundColor: '#16213e',
+    borderRadius: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#0f3460',
+    borderStyle: 'dashed'
+  },
+  adPlaceholderText: {
+    color: '#666',
+    fontSize: 12
   }
 });
+
+export default MenuScreen;

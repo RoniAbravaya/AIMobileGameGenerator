@@ -23,7 +23,7 @@ interface GameScreenProps {
   onExit: () => void;
 }
 
-export const GameScreen: React.FC<GameScreenProps> = ({
+const GameScreen: React.FC<GameScreenProps> = ({
   levelId,
   onLevelComplete,
   onGameOver,
@@ -272,3 +272,5 @@ const styles = StyleSheet.create({
     marginTop: 50
   }
 });
+
+export default GameScreen;

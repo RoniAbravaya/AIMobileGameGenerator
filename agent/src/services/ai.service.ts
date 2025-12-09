@@ -128,9 +128,9 @@ Requirements:
 - Theme: ${request.theme}
 - Game Mechanics: ${mechanicsStr}
 - Number of Levels: ${request.levelCount}
-- Framework: Expo SDK 50+, React Native, TypeScript
-- Target Platform: Android only
-- Monetization: AdMob banners + interstitials, In-app purchases (coins/lives)
+- Framework: Expo SDK 54, React Native 0.79, TypeScript
+- Target Platform: Android (Expo Go compatible)
+- NO native modules that require custom builds (no react-native-google-mobile-ads, no expo-linear-gradient, no @expo/vector-icons)
 
 Game Structure:
 1. Create a functional game with proper game loop
@@ -144,48 +144,47 @@ Game Structure:
 Technical Requirements:
 - Use TypeScript with strict types
 - Functional components with React hooks
-- Create reusable components
+- Use default exports for screen components
 - Include comprehensive inline comments
 - Handle edge cases (app backgrounding, interruptions)
 - Follow React Native best practices
+- Use only these dependencies: react, react-native, expo, expo-router, expo-status-bar, @react-native-async-storage/async-storage, react-native-safe-area-context
 
-Monetization Integration:
-- AdMob banner on menu screen
-- Interstitial ad between levels (not too aggressive)
-- Purchase buttons for coins/lives
+IMPORTANT OUTPUT RULES:
+1. Do NOT wrap code in markdown code blocks (no \`\`\`typescript or \`\`\`)
+2. Output ONLY raw TypeScript/JavaScript code between the file markers
+3. Use default exports: "export default ComponentName" (not "export const ComponentName")
 
 Output Format:
-Provide the code in this structure:
+Provide the code in this EXACT structure (NO markdown formatting):
 
 ===FILE: app/screens/MenuScreen.tsx===
-[code here]
+import React from 'react';
+// ... rest of the code with NO markdown code blocks
+export default MenuScreen;
 ===END FILE===
 
 ===FILE: app/screens/GameScreen.tsx===
-[code here]
+import React from 'react';
+// ... rest of the code with NO markdown code blocks
+export default GameScreen;
 ===END FILE===
 
-===FILE: app/screens/GameOverScreen.tsx===
-[code here]
-===END FILE===
-
-===FILE: app/components/GameEngine/GameEngine.tsx===
-[code here]
+===FILE: app/screens/ShopScreen.tsx===
+import React from 'react';
+// ... rest of the code with NO markdown code blocks
+export default ShopScreen;
 ===END FILE===
 
 ===FILE: app/config/levels.ts===
-[code here]
-===END FILE===
-
-===FILE: app/hooks/useGameState.ts===
-[code here]
+// ... level configuration
 ===END FILE===
 
 ===FILE: __tests__/game-logic.test.ts===
-[code here]
+// ... tests
 ===END FILE===
 
-Generate complete, production-ready code. Be creative with the game mechanics while keeping it simple and fun.`;
+Generate complete, production-ready code that works in Expo Go without native builds.`;
   }
 
   /**
@@ -264,7 +263,12 @@ Return ONLY a valid JSON array of level objects, no markdown, no explanation:
     while ((match = fileRegex.exec(text)) !== null) {
       const [, filepath, content] = match;
       const cleanPath = filepath.trim();
-      const cleanContent = content.trim();
+      
+      // Strip markdown code blocks if AI accidentally included them
+      let cleanContent = content.trim();
+      cleanContent = cleanContent.replace(/^```(?:typescript|tsx|ts|javascript|js)?\n?/gm, '');
+      cleanContent = cleanContent.replace(/\n?```$/gm, '');
+      cleanContent = cleanContent.trim();
 
       if (cleanPath.includes('__tests__')) {
         tests[cleanPath] = cleanContent;

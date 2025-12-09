@@ -171,30 +171,51 @@ export class GameGenerator {
       await fs.ensureDir(path.join(projectPath, dir));
     }
 
-    // Create package.json
+    // Create package.json with SDK 54 compatible dependencies
     const packageJson = {
       name: path.basename(projectPath),
       version: '1.0.0',
-      main: 'expo-router',
+      main: 'expo-router/entry',
       scripts: {
         start: 'expo start',
         android: 'expo start --android',
+        ios: 'expo start --ios',
+        web: 'expo start --web',
         test: 'jest',
         lint: 'eslint .'
       },
       dependencies: {
-        'expo': '~50.0.0',
-        'expo-router': '~3.4.0',
-        'react': '18.2.0',
-        'react-native': '0.73.0',
-        'react-native-google-mobile-ads': '^12.0.0',
-        'react-native-iap': '^12.10.0'
+        '@react-native-async-storage/async-storage': '2.1.2',
+        'expo': '~54.0.0',
+        'expo-constants': '~17.1.0',
+        'expo-linking': '~7.1.0',
+        'expo-router': '~5.0.0',
+        'expo-status-bar': '~2.2.0',
+        'react': '19.0.0',
+        'react-dom': '19.0.0',
+        'react-native': '0.79.2',
+        'react-native-gesture-handler': '~2.24.0',
+        'react-native-reanimated': '~3.17.4',
+        'react-native-safe-area-context': '5.4.0',
+        'react-native-screens': '~4.10.0',
+        'react-native-web': '~0.20.0'
       },
       devDependencies: {
-        '@types/react': '~18.2.45',
+        '@babel/core': '^7.26.0',
+        '@types/react': '~19.0.10',
+        'typescript': '~5.8.3',
         'jest': '^29.7.0',
-        'typescript': '^5.3.0'
-      }
+        'jest-expo': '~54.0.0',
+        '@testing-library/react-native': '^13.0.0',
+        'react-test-renderer': '19.0.0'
+      },
+      jest: {
+        preset: 'jest-expo',
+        transformIgnorePatterns: [
+          'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)'
+        ]
+      },
+      private: true
     };
 
     await fs.writeJson(path.join(projectPath, 'package.json'), packageJson, { spaces: 2 });
@@ -206,12 +227,37 @@ export class GameGenerator {
         slug: 'game',
         version: '1.0.0',
         orientation: 'portrait',
-        platforms: ['android'],
+        userInterfaceStyle: 'dark',
+        newArchEnabled: true,
+        splash: {
+          backgroundColor: '#1a1a2e'
+        },
         android: {
           package: 'com.example.game'
+        },
+        web: {
+          bundler: 'metro'
+        },
+        plugins: ['expo-router'],
+        scheme: 'game',
+        experiments: {
+          typedRoutes: true
         }
       }
     }, { spaces: 2 });
+
+    // Create babel.config.js
+    const babelConfig = `module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: ['babel-preset-expo'],
+  };
+};
+`;
+    await fs.writeFile(path.join(projectPath, 'babel.config.js'), babelConfig, 'utf-8');
+
+    // Create .npmrc for legacy peer deps
+    await fs.writeFile(path.join(projectPath, '.npmrc'), 'legacy-peer-deps=true\n', 'utf-8');
   }
 
   /**

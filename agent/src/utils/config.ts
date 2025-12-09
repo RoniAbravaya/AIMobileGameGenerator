@@ -1,13 +1,21 @@
 /**
  * Configuration loader for the AI agent
+ * Loads environment variables from .env file in project root
  */
 
 import { config as loadEnv } from 'dotenv';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { AgentConfig } from '../types/index.js';
 import { logger } from './logger.js';
 
-// Load environment variables
-loadEnv();
+// Get the directory of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load environment variables from project root (.env is in parent of agent folder)
+const envPath = resolve(__dirname, '../../../.env');
+loadEnv({ path: envPath });
 
 export function getConfig(): AgentConfig {
   const requiredVars = [

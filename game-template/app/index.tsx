@@ -6,9 +6,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { MenuScreen } from './screens/MenuScreen';
-import { GameScreen } from './screens/GameScreen';
-import { ShopScreen } from './screens/ShopScreen';
+import MenuScreen from './screens/MenuScreen';
+import GameScreen from './screens/GameScreen';
+import ShopScreen from './screens/ShopScreen';
 import { useGameState } from './hooks/useGameState';
 
 type Screen = 'menu' | 'game' | 'shop';

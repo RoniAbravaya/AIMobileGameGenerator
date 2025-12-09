@@ -20,7 +20,7 @@ interface ShopScreenProps {
   onClose: () => void;
 }
 
-export const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
+const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
   const { state, addCoins, addLives } = useGameState();
   const { products, isPurchasing, isInitialized, purchaseCoins, purchaseLives, getProduct } = useIAP();
 
@@ -247,3 +247,5 @@ const styles = StyleSheet.create({
     marginTop: 20
   }
 });
+
+export default ShopScreen;

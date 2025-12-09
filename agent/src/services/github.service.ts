@@ -20,19 +20,40 @@ export class GitHubService {
 
   /**
    * Create a new GitHub repository
+   * Tries to create in organization first, falls back to personal account
    */
   async createRepository(config: GitHubRepoConfig): Promise<string> {
     logger.info(`Creating GitHub repository: ${config.name}`);
 
     try {
-      const response = await this.octokit.repos.createForAuthenticatedUser({
-        name: config.name,
-        description: config.description,
-        private: config.private,
-        auto_init: config.autoInit
-      });
+      let response;
+      
+      // First, try to create in the organization (if owner is an org)
+      try {
+        response = await this.octokit.repos.createInOrg({
+          org: this.owner,
+          name: config.name,
+          description: config.description,
+          private: config.private,
+          auto_init: config.autoInit
+        });
+        logger.success(`Repository created in org ${this.owner}: ${response.data.html_url}`);
+      } catch (orgError: any) {
+        // If org creation fails (e.g., owner is a user, not an org), try personal account
+        if (orgError.status === 404 || orgError.message?.includes('Not Found')) {
+          logger.info('Organization not found, creating in personal account');
+          response = await this.octokit.repos.createForAuthenticatedUser({
+            name: config.name,
+            description: config.description,
+            private: config.private,
+            auto_init: config.autoInit
+          });
+          logger.success(`Repository created: ${response.data.html_url}`);
+        } else {
+          throw orgError;
+        }
+      }
 
-      logger.success(`Repository created: ${response.data.html_url}`);
       return response.data.clone_url;
     } catch (error: any) {
       if (error.status === 422) {
@@ -84,22 +105,32 @@ export class GitHubService {
     logger.info('Initializing git and pushing to remote');
 
     try {
+      // Remove any existing .git folder to ensure this is a fresh repo
+      // (in case it inherited from parent directory)
+      const existingGitDir = path.join(localPath, '.git');
+      if (await fs.pathExists(existingGitDir)) {
+        await fs.remove(existingGitDir);
+      }
+
       const git: SimpleGit = simpleGit(localPath);
       
-      // Initialize if not already a git repo
-      const isRepo = await git.checkIsRepo();
-      if (!isRepo) {
-        await git.init();
-      }
+      // Initialize fresh git repo
+      await git.init();
 
-      // Add remote if it doesn't exist
-      const remotes = await git.getRemotes();
-      if (!remotes.find(r => r.name === 'origin')) {
-        await git.addRemote('origin', repoUrl);
-      }
+      // Configure git user for this repo (use env vars or defaults)
+      const gitEmail = process.env.GIT_USER_EMAIL || 'ai-game-generator@example.com';
+      const gitName = process.env.GIT_USER_NAME || 'AI Game Generator';
+      await git.addConfig('user.email', gitEmail, false, 'local');
+      await git.addConfig('user.name', gitName, false, 'local');
 
-      // Stage all files
-      await git.add('.');
+      // Set default branch to main
+      await git.branch(['-M', 'main']);
+
+      // Add remote
+      await git.addRemote('origin', repoUrl);
+
+      // Stage all files using --force to bypass parent .gitignore
+      await git.raw(['add', '--force', '.']);
 
       // Commit
       await git.commit(commitMessage);
