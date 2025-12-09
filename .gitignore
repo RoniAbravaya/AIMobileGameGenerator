@@ -1,0 +1,58 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Secrets
+secrets/
+*.json.key
+google-play-key.json
+
+# Node modules
+node_modules/
+*/node_modules/
+
+# Build outputs
+dist/
+build/
+*.tgz
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
+
+# Native
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.keystore
+*.mobileprovision
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Generated games (optional - comment out if you want to commit them)
+generated-games/
+
+# Test coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
