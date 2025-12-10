@@ -182,22 +182,36 @@ export class QualityValidator {
   private async validateGameplayQuality(gamePath: string): Promise<GameplayQualityScore> {
     console.log(`[GameplayQuality] Testing gameplay...`);
     
-    // This will be implemented in gameplayTester.ts
-    // For now, return a placeholder
-    return {
-      score: 85,
-      stability: true,
-      winReachable: true,
-      loseReachable: true,
-      scoringWorks: true,
-      controlsResponsive: true,
-      details: {
-        testDuration: 30000,
-        inputsSimulated: this.config.simulatedInputs,
-        crashCount: 0,
-        performanceScore: 60
-      }
-    };
+    try {
+      const { GameplayTester } = await import('../testing/gameplayTester.js');
+      const tester = new GameplayTester({
+        maxDuration: this.config.maxTestDuration,
+        inputCount: this.config.simulatedInputs,
+        minFPS: 45,
+        timeoutPerAction: 1000
+      });
+      
+      const result = await tester.testGameplay(gamePath);
+      return result.score;
+    } catch (error: any) {
+      console.error('[GameplayQuality] Testing failed:', error);
+      
+      // Return failed score
+      return {
+        score: 0,
+        stability: false,
+        winReachable: false,
+        loseReachable: false,
+        scoringWorks: false,
+        controlsResponsive: false,
+        details: {
+          testDuration: 0,
+          inputsSimulated: 0,
+          crashCount: 1,
+          performanceScore: 0
+        }
+      };
+    }
   }
 
   /**
@@ -206,22 +220,37 @@ export class QualityValidator {
   private async validateVisualQuality(gamePath: string): Promise<VisualQualityScore> {
     console.log(`[VisualQuality] Validating visuals...`);
     
-    // This will be implemented in visualValidator.ts
-    // For now, return a placeholder
-    return {
-      score: 85,
-      contrast: true,
-      imagesLoad: true,
-      layoutValid: true,
-      animationsSmooth: true,
-      themeConsistent: true,
-      details: {
-        contrastRatio: 7.5,
-        imageLoadTime: 500,
-        layoutIssues: [],
-        averageFPS: 60
-      }
-    };
+    try {
+      const { VisualValidator } = await import('./visualValidator.js');
+      const validator = new VisualValidator({
+        checkContrast: true,
+        checkImages: true,
+        checkLayout: true,
+        checkAnimations: true,
+        checkTheme: true,
+        minContrastRatio: 4.5
+      });
+      
+      return await validator.validateVisualQuality(gamePath);
+    } catch (error: any) {
+      console.error('[VisualQuality] Validation failed:', error);
+      
+      // Return failed score
+      return {
+        score: 0,
+        contrast: false,
+        imagesLoad: false,
+        layoutValid: false,
+        animationsSmooth: false,
+        themeConsistent: false,
+        details: {
+          contrastRatio: 0,
+          imageLoadTime: 0,
+          layoutIssues: [error.message],
+          averageFPS: 0
+        }
+      };
+    }
   }
 
   /**

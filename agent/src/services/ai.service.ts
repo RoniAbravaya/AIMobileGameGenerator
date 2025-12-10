@@ -4,6 +4,8 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { AIGenerationRequest, AIGenerationResponse, GameType } from '../types/index.js';
+import { GameSpec, validateGameSpec } from '../models/GameSpec.js';
+import { buildGameSpecPrompt, parseGameSpecResponse, GameDesignHints, PreviousGameSummary } from '../prompts/gameSpecPrompt.js';
 import { logger } from '../utils/logger.js';
 
 export class AIService {
@@ -11,6 +13,101 @@ export class AIService {
 
   constructor(apiKey: string) {
     this.client = new Anthropic({ apiKey });
+  }
+
+  /**
+   * Generate a new GameSpec (game design)
+   * This is the FIRST step in creating a new game
+   */
+  async generateGameSpec(
+    previousGames: PreviousGameSummary[] = [],
+    hints?: GameDesignHints,
+    maxRetries: number = 3
+  ): Promise<GameSpec> {
+    logger.info('Generating new GameSpec with AI...');
+    
+    if (previousGames.length > 0) {
+      logger.info(`Previous games: ${previousGames.length} (avoiding repetition)`);
+    }
+    
+    if (hints) {
+      logger.info(`User hints: ${JSON.stringify(hints)}`);
+    }
+    
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info(`GameSpec generation attempt ${attempt}/${maxRetries}...`);
+        
+        // Build prompt
+        const prompt = buildGameSpecPrompt(previousGames, hints);
+        
+        // Call Claude
+        const response = await this.client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          temperature: 0.85,  // Higher temp for more creativity
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ]
+        });
+        
+        const content = response.content[0];
+        if (content.type !== 'text') {
+          throw new Error('Unexpected response type from Claude API');
+        }
+        
+        // Parse response
+        const gameSpec = parseGameSpecResponse(content.text);
+        
+        // Validate
+        const validation = validateGameSpec(gameSpec);
+        
+        if (!validation.valid) {
+          logger.warn(`GameSpec validation failed on attempt ${attempt}`);
+          logger.warn(`Errors: ${validation.errors.join(', ')}`);
+          
+          if (attempt < maxRetries) {
+            // Try again with error feedback
+            previousGames.push({
+              id: 'invalid-attempt',
+              name: 'Invalid Attempt',
+              highConcept: validation.errors.join('; '),
+              tags: [],
+              genre: 'error'
+            });
+            continue;
+          } else {
+            throw new Error(`GameSpec validation failed: ${validation.errors.join(', ')}`);
+          }
+        }
+        
+        if (validation.warnings.length > 0) {
+          logger.warn(`GameSpec warnings: ${validation.warnings.join(', ')}`);
+        }
+        
+        logger.success(`GameSpec generated: ${gameSpec.name}`);
+        logger.info(`Genre: ${gameSpec.mechanics.genre}`);
+        logger.info(`Theme: ${gameSpec.visualTheme.mood}`);
+        
+        return gameSpec;
+        
+      } catch (error: any) {
+        lastError = error;
+        logger.error(`GameSpec generation attempt ${attempt} failed:`, error.message);
+        
+        if (attempt < maxRetries) {
+          logger.info('Retrying with adjusted parameters...');
+          await this.sleep(1000 * attempt); // Exponential backoff
+        }
+      }
+    }
+    
+    throw new Error(`Failed to generate GameSpec after ${maxRetries} attempts: ${lastError?.message}`);
   }
 
   /**
@@ -330,5 +427,12 @@ Return ONLY a valid JSON array of level objects, no markdown, no explanation:
       logger.error('Failed to parse levels JSON', error);
       throw new Error('Invalid JSON response for levels');
     }
+  }
+
+  /**
+   * Sleep helper for retry delays
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
