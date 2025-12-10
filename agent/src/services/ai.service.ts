@@ -257,35 +257,49 @@ MenuScreen props (MUST match exactly):
 - onOpenShop: () => void                // Called when user opens shop
 
 GameScreen props (MUST match exactly):
-- levelId: number                       // Current level being played
-- onLevelComplete: () => void           // Called when level is completed
-- onGameOver: () => void                // Called on game over
+- levelId: number                       // Current level being played (NOT "level")
+- onLevelComplete: () => void           // Called when level is completed (NO parameters)
+- onGameOver: () => void                // Called on game over (NO parameters)
 - onExit: () => void                    // Called when exiting to menu
 
 ShopScreen props (MUST match exactly):
 - onClose: () => void                   // Called when closing shop
 
+LEVELS CONFIG STRUCTURE (app/config/levels.ts):
+Export a LEVELS array with this interface:
+interface Level {
+  id: number;
+  name: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  targetScore: number;
+  obstacles: number;
+}
+Export helper function: getLevelById(id: number)
+GameScreen should derive game settings (speed, spawnRate, etc.) from Level properties.
+DO NOT expect properties like "speed", "targetDistance", "spawnRate" directly on levels.
+
 IMPORTANT OUTPUT RULES:
 1. Do NOT wrap code in markdown code blocks (no \`\`\`typescript or \`\`\`)
 2. Output ONLY raw TypeScript/JavaScript code between the file markers
 3. Use default exports: "export default ComponentName" (not "export const ComponentName")
-4. Props in MenuScreen MUST be named exactly: onStartGame, onOpenShop
+4. Props in GameScreen MUST be: levelId, onLevelComplete, onGameOver, onExit
+5. GameScreen must accept "levelId" NOT "level" as the prop name
 
 Output Format:
 Provide the code in this EXACT structure (NO markdown formatting):
 
 ===FILE: app/index.tsx===
 // Main entry point that renders MenuScreen, GameScreen, ShopScreen
-// MUST pass onStartGame (not onStartLevel) to MenuScreen
+// MUST pass: onStartGame to MenuScreen, levelId to GameScreen
 ===END FILE===
 
 ===FILE: app/screens/MenuScreen.tsx===
 // MenuScreen with props: { onStartGame, onOpenShop }
-// MUST use onStartGame prop name (not onStartLevel or onPlay)
 ===END FILE===
 
 ===FILE: app/screens/GameScreen.tsx===
 // GameScreen with props: { levelId, onLevelComplete, onGameOver, onExit }
+// MUST use "levelId" not "level" as prop name
 ===END FILE===
 
 ===FILE: app/screens/ShopScreen.tsx===
@@ -293,7 +307,7 @@ Provide the code in this EXACT structure (NO markdown formatting):
 ===END FILE===
 
 ===FILE: app/config/levels.ts===
-// Level configuration
+// Level configuration with LEVELS array and getLevelById function
 ===END FILE===
 
 ===FILE: __tests__/game-logic.test.ts===
