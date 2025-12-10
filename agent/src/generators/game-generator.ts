@@ -426,8 +426,15 @@ export class GameGenerator {
     const workflow = `name: CI/CD Pipeline
 
 # This workflow runs tests on every push/PR
-# Build and Submit jobs only run when EXPO_TOKEN secret is configured
-# To enable builds: Go to repo Settings > Secrets > Actions > Add EXPO_TOKEN
+# Build and Submit jobs only run when:
+# 1. EXPO_TOKEN secret is configured
+# 2. Expo project exists (configured in app.json)
+#
+# To enable builds:
+# 1. Create an Expo account and project at https://expo.dev
+# 2. Get your projectId from: npx eas-cli project:info or app.json
+# 3. Update app.json with your real projectId
+# 4. Go to repo Settings > Secrets > Actions > Add EXPO_TOKEN secret with your token
 
 on:
   push:
@@ -460,39 +467,74 @@ jobs:
           node-version: '20'
           cache: 'npm'
       
-      - name: Check for EXPO_TOKEN
-        id: check_token
+      - name: Check prerequisites
+        id: check_prereqs
         run: |
+          SKIP_BUILD="false"
+          
+          # Check EXPO_TOKEN
           if [ -z "\${{ secrets.EXPO_TOKEN }}" ]; then
-            echo "EXPO_TOKEN not configured. Skipping build."
-            echo "skip=true" >> \$GITHUB_OUTPUT
-          else
-            echo "skip=false" >> \$GITHUB_OUTPUT
+            echo "⚠️  EXPO_TOKEN not configured. Skipping build."
+            SKIP_BUILD="true"
+          fi
+          
+          # Check if projectId exists in app.json
+          PROJECT_ID=\$(node -e "try { console.log(require('./app.json').expo.extra.eas.projectId); } catch(e) { console.log(''); }")
+          if [ -z "\$PROJECT_ID" ]; then
+            echo "⚠️  projectId not found in app.json. Skipping build."
+            SKIP_BUILD="true"
+          fi
+          
+          echo "skip=\$SKIP_BUILD" >> \$GITHUB_OUTPUT
+          
+          if [ "\$SKIP_BUILD" = "true" ]; then
+            echo "BUILD_SKIPPED=true" >> \$GITHUB_ENV
           fi
       
       - name: Setup Expo
-        if: steps.check_token.outputs.skip != 'true'
+        if: steps.check_prereqs.outputs.skip != 'true'
         uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: \${{ secrets.EXPO_TOKEN }}
       
       - name: Install dependencies
-        if: steps.check_token.outputs.skip != 'true'
+        if: steps.check_prereqs.outputs.skip != 'true'
         run: npm ci
       
       - name: Build Android
-        if: steps.check_token.outputs.skip != 'true'
+        if: steps.check_prereqs.outputs.skip != 'true'
         run: eas build --platform android --profile production --non-interactive
         env:
           EXPO_TOKEN: \${{ secrets.EXPO_TOKEN }}
+        continue-on-error: true
       
-      - name: Skip notice
-        if: steps.check_token.outputs.skip == 'true'
+      - name: Check build status
+        if: steps.check_prereqs.outputs.skip != 'true'
         run: |
-          echo "::notice::Build skipped - EXPO_TOKEN not configured"
-          echo "To enable builds, add EXPO_TOKEN to repository secrets"
-          echo "Go to: Settings > Secrets and variables > Actions > New repository secret"
+          if [ \$? -ne 0 ]; then
+            echo "::error::Build failed. Common causes:"
+            echo "  1. Expo project doesn't exist (invalid projectId)"
+            echo "  2. EXPO_TOKEN is invalid or expired"
+            echo "  3. Insufficient account permissions"
+            exit 1
+          fi
+      
+      - name: Setup instructions
+        if: steps.check_prereqs.outputs.skip == 'true'
+        run: |
+          echo "::notice::Build skipped - Setup required"
+          echo "To enable EAS builds:"
+          echo ""
+          echo "1. Create Expo account: https://expo.dev"
+          echo "2. Create a new project or get projectId from existing one"
+          echo "3. Update app.json with your projectId"
+          echo "4. Add EXPO_TOKEN to repository secrets:"
+          echo "   Go to: Settings > Secrets and variables > Actions > New repository secret"
+          echo ""
+          echo "Commands to help:"
+          echo "  npx eas init               # Create/link Expo project"
+          echo "  npx eas-cli project:info   # Get your projectId"
 `;
 
     await this.githubService.addWorkflowFile(projectPath, workflow);
