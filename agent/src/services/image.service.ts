@@ -6,20 +6,22 @@
 import { execa } from 'execa';
 import fs from 'fs-extra';
 import path from 'path';
-import { GameType } from '../types/index.js';
+import { GameSpec } from '../models/GameSpec.js';
 import { logger } from '../utils/logger.js';
-
-export interface ImageGenerationRequest {
-  gameType: GameType;
-  theme: string;
-  styleKeywords: string[];
-}
 
 export interface ImageGenerationResult {
   success: boolean;
   splashPath?: string;
-  iconPath?: string;
+  menuBgPath?: string;
+  sceneBgPath?: string;
   error?: string;
+}
+
+export interface ImageAsset {
+  type: 'splash' | 'menu-bg' | 'scene-bg';
+  filename: string;
+  size: string; // WIDTHxHEIGHT
+  prompt: string;
 }
 
 export class ImageService {
@@ -34,10 +36,10 @@ export class ImageService {
   }
 
   /**
-   * Generate splash screen and icon for a game
+   * Generate all game assets from GameSpec
    */
-  async generateGameAssets(request: ImageGenerationRequest, outputDir: string): Promise<ImageGenerationResult> {
-    logger.info(`Generating AI images for ${request.gameType} game: ${request.theme}`);
+  async generateGameAssets(spec: GameSpec, outputDir: string): Promise<ImageGenerationResult> {
+    logger.info(`Generating AI images for: ${spec.name}`);
 
     // Check if API key is configured
     if (!this.apiKey || this.apiKey === 'your_image_api_key_here') {
@@ -46,18 +48,36 @@ export class ImageService {
     }
 
     try {
-      // Generate splash screen
-      const splashPrompt = this.buildSplashPrompt(request);
-      const splashPath = await this.generateImage(splashPrompt, outputDir, 'splash.png', '1080x1920');
+      // Build asset prompts
+      const assets = this.buildAssetPrompts(spec);
 
-      // Generate icon
-      const iconPrompt = this.buildIconPrompt(request);
-      const iconPath = await this.generateImage(iconPrompt, outputDir, 'icon.png', '1024x1024');
+      // Generate each asset
+      const splashPath = await this.generateImage(
+        assets.find(a => a.type === 'splash')!.prompt,
+        outputDir,
+        'splash.png',
+        '1024x1792'
+      );
+
+      const menuBgPath = await this.generateImage(
+        assets.find(a => a.type === 'menu-bg')!.prompt,
+        outputDir,
+        'menu-bg.png',
+        '1024x1792'
+      );
+
+      const sceneBgPath = await this.generateImage(
+        assets.find(a => a.type === 'scene-bg')!.prompt,
+        outputDir,
+        'scene-bg.png',
+        '1792x1024'
+      );
 
       return {
         success: true,
         splashPath,
-        iconPath
+        menuBgPath,
+        sceneBgPath
       };
     } catch (error: any) {
       logger.error('Failed to generate images, using fallbacks', error);
@@ -66,35 +86,88 @@ export class ImageService {
   }
 
   /**
-   * Build splash screen prompt
+   * Build prompts for all game assets
    */
-  private buildSplashPrompt(request: ImageGenerationRequest): string {
-    const keywords = request.styleKeywords.join(', ');
-    
-    const prompts: Record<GameType, string> = {
-      [GameType.RUNNER]: `A vibrant neon cyber city runner game splash screen, ${keywords}, neon lights, futuristic cityscape, high contrast colors, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.PUZZLE]: `A calm minimalist puzzle game splash screen, ${keywords}, soft pastel colors, zen aesthetic, peaceful nature scene, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.WORD]: `A word tower puzzle game splash screen, ${keywords}, letters floating upwards, clean typography, modern design, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.CARD]: `A space card game splash screen, ${keywords}, sci-fi aesthetic, card game elements, stars and planets background, elegant design, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.PLATFORMER]: `A colorful platform adventure game splash screen, ${keywords}, cartoon style, cheerful nature scene, bright colors, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.CASUAL]: `A casual mobile game splash screen, ${keywords}, fun and colorful, simple design, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.ARCADE]: `An arcade game splash screen, ${keywords}, retro-modern style, vibrant colors, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.RACING]: `A racing game splash screen, ${keywords}, speed and motion, dynamic composition, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.ADVENTURE]: `An adventure game splash screen, ${keywords}, exploration theme, epic landscape, vertical portrait orientation, mobile game art style, no text`,
-      [GameType.STRATEGY]: `A strategy game splash screen, ${keywords}, tactical theme, clean design, vertical portrait orientation, mobile game art style, no text`
-    };
+  private buildAssetPrompts(spec: GameSpec): ImageAsset[] {
+    const { name, highConcept, visualTheme } = spec;
+    const mood = visualTheme.mood || 'energetic';
+    const style = visualTheme.style || 'modern';
+    const palette = visualTheme.palette || [];
+    const colors = palette.slice(0, 3).join(', ');
 
-    return prompts[request.gameType] || prompts[GameType.RUNNER];
-  }
+    // Extract key themes from high concept
+    const conceptWords = highConcept.toLowerCase();
+    const isSpace = conceptWords.includes('space') || conceptWords.includes('orbit');
+    const isNature = conceptWords.includes('nature') || conceptWords.includes('forest') || conceptWords.includes('garden');
+    const isCyber = conceptWords.includes('cyber') || conceptWords.includes('neon') || conceptWords.includes('digital');
+    const isRetro = conceptWords.includes('retro') || conceptWords.includes('pixel') || conceptWords.includes('arcade');
 
-  /**
-   * Build icon prompt
-   */
-  private buildIconPrompt(request: ImageGenerationRequest): string {
-    const theme = request.theme;
-    const keywords = request.styleKeywords.slice(0, 3).join(', ');
-    
-    return `A simple, iconic mobile app icon for a ${request.gameType} game, ${theme}, ${keywords}, minimalist design, centered composition, square format, professional mobile game icon style, no text`;
+    // Build splash screen prompt (main title screen)
+    const splashPrompt = [
+      `A stunning mobile game splash screen for "${name}".`,
+      `High concept: ${highConcept}.`,
+      `Visual style: ${style}, ${mood} mood.`,
+      colors && `Color palette: ${colors}.`,
+      isSpace && 'Space theme with stars and planets.',
+      isNature && 'Nature theme with organic elements.',
+      isCyber && 'Cyberpunk theme with neon lights and technology.',
+      isRetro && 'Retro pixel art aesthetic.',
+      'Vertical portrait orientation.',
+      'Professional mobile game art style.',
+      'Cinematic composition.',
+      'No text or UI elements.',
+      'High quality, detailed, atmospheric.'
+    ].filter(Boolean).join(' ');
+
+    // Build menu background prompt (simpler, less busy)
+    const menuBgPrompt = [
+      `A clean background image for a mobile game menu.`,
+      `Theme: ${highConcept}.`,
+      `Style: ${style}, ${mood} mood.`,
+      colors && `Colors: ${colors}.`,
+      'Subtle, not too busy.',
+      'Vertical portrait orientation.',
+      'Blurred or abstract style.',
+      'Perfect as a background for UI elements.',
+      'No text.'
+    ].filter(Boolean).join(' ');
+
+    // Build gameplay scene background prompt (horizontal for gameplay)
+    const sceneBgPrompt = [
+      `A gameplay background for a mobile game.`,
+      `Game concept: ${highConcept}.`,
+      `Visual style: ${style}, ${mood} atmosphere.`,
+      colors && `Color scheme: ${colors}.`,
+      isSpace && 'Outer space environment.',
+      isNature && 'Natural outdoor environment.',
+      isCyber && 'Futuristic city or digital world.',
+      isRetro && 'Retro game environment.',
+      'Horizontal landscape orientation.',
+      'Suitable for 2D game overlay.',
+      'Depth and layers.',
+      'No text, no characters.'
+    ].filter(Boolean).join(' ');
+
+    return [
+      {
+        type: 'splash',
+        filename: 'splash.png',
+        size: '1024x1792',
+        prompt: splashPrompt
+      },
+      {
+        type: 'menu-bg',
+        filename: 'menu-bg.png',
+        size: '1024x1792',
+        prompt: menuBgPrompt
+      },
+      {
+        type: 'scene-bg',
+        filename: 'scene-bg.png',
+        size: '1792x1024',
+        prompt: sceneBgPrompt
+      }
+    ];
   }
 
   /**
@@ -168,28 +241,27 @@ export class ImageService {
     await fs.ensureDir(outputDir);
     
     const splashPath = path.join(outputDir, 'splash.png');
-    const iconPath = path.join(outputDir, 'icon.png');
+    const menuBgPath = path.join(outputDir, 'menu-bg.png');
+    const sceneBgPath = path.join(outputDir, 'scene-bg.png');
     
-    await this.copyFallbackImage(splashPath, 'splash.png');
-    await this.copyFallbackImage(iconPath, 'icon.png');
+    await this.createFallbackImage(splashPath, '1024x1792', '#1a1a2e');
+    await this.createFallbackImage(menuBgPath, '1024x1792', '#16213e');
+    await this.createFallbackImage(sceneBgPath, '1792x1024', '#0f3460');
     
     return {
       success: true,
       splashPath,
-      iconPath
+      menuBgPath,
+      sceneBgPath
     };
   }
 
   /**
-   * Copy fallback image from template
+   * Create fallback placeholder image
    */
-  private async copyFallbackImage(targetPath: string, filename: string): Promise<string> {
-    // Create a simple placeholder image using ImageMagick if available, or just create an empty file
+  private async createFallbackImage(targetPath: string, size: string, color: string): Promise<string> {
+    // Create a simple placeholder image using ImageMagick if available
     try {
-      const isIcon = filename.includes('icon');
-      const size = isIcon ? '1024x1024' : '1080x1920';
-      const color = isIcon ? '#4ecca3' : '#1a1a2e';
-      
       // Try to use ImageMagick to create a simple colored image
       await execa('convert', [
         '-size', size,
@@ -199,9 +271,22 @@ export class ImageService {
       
       logger.info(`Created placeholder image: ${targetPath}`);
     } catch (error) {
-      // ImageMagick not available, create empty file as placeholder
-      await fs.writeFile(targetPath, '');
-      logger.warn(`Created empty placeholder: ${targetPath}`);
+      // ImageMagick not available, create a minimal PNG file
+      // Create a 1x1 transparent PNG as fallback
+      const minimalPNG = Buffer.from([
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+        0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+        0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+        0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+        0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+        0x42, 0x60, 0x82
+      ]);
+      
+      await fs.writeFile(targetPath, minimalPNG);
+      logger.warn(`Created minimal PNG placeholder: ${targetPath}`);
     }
     
     return targetPath;

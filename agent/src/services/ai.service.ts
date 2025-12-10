@@ -430,6 +430,104 @@ Return ONLY a valid JSON array of level objects, no markdown, no explanation:
   }
 
   /**
+   * Generate mechanics code from GameSpec
+   * This is the SECOND step in creating a new game (after GameSpec)
+   */
+  async generateMechanics(
+    spec: GameSpec,
+    maxRetries: number = 3
+  ): Promise<{
+    entities: string;
+    gameLogic: string;
+    gameScreen: string;
+  }> {
+    logger.info(`Generating mechanics code for: ${spec.name}`);
+    
+    const { buildMechanicsPrompt, parseMechanicsResponse, validateGeneratedMechanics, getSuggestedFixes } = await import('../prompts/mechanicsPrompt.js');
+    
+    let lastError: string = '';
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info(`Mechanics generation attempt ${attempt}/${maxRetries}...`);
+        
+        // Build prompt
+        const prompt = buildMechanicsPrompt(spec);
+        
+        // Add error feedback if this is a retry
+        const fullPrompt = attempt > 1
+          ? `${prompt}\n\n---\n\n## PREVIOUS ATTEMPT FAILED\n\nThe previous generation had these issues:\n${lastError}\n\nPlease fix these issues and regenerate complete, working code.`
+          : prompt;
+        
+        // Call Claude
+        const response = await this.client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 16000,
+          temperature: 0.7,
+          messages: [
+            {
+              role: 'user',
+              content: fullPrompt
+            }
+          ]
+        });
+        
+        // Extract response text
+        const responseText = response.content
+          .filter(block => block.type === 'text')
+          .map(block => (block as any).text)
+          .join('\n');
+        
+        logger.info(`Received ${responseText.length} characters`);
+        
+        // Parse response
+        const mechanics = parseMechanicsResponse(responseText);
+        logger.info('Parsed 3 files successfully');
+        
+        // Validate
+        const validation = validateGeneratedMechanics(mechanics);
+        
+        if (!validation.valid) {
+          lastError = `Validation failed:\n${validation.errors.join('\n')}`;
+          
+          if (validation.warnings.length > 0) {
+            lastError += `\n\nWarnings:\n${validation.warnings.join('\n')}`;
+          }
+          
+          lastError += `\n\n${getSuggestedFixes(validation)}`;
+          
+          logger.warn(`Validation failed: ${validation.errors.join(', ')}`);
+          
+          if (attempt < maxRetries) {
+            logger.info('Retrying with error feedback...');
+            await this.sleep(1000 * attempt);
+            continue;
+          }
+        } else {
+          logger.info('✅ Validation passed!');
+          
+          if (validation.warnings.length > 0) {
+            logger.warn(`⚠️  Warnings: ${validation.warnings.join(', ')}`);
+          }
+          
+          return mechanics;
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error);
+        logger.error(`Attempt ${attempt} failed: ${lastError}`);
+        
+        if (attempt < maxRetries) {
+          logger.info('Retrying...');
+          await this.sleep(1000 * attempt);
+          continue;
+        }
+      }
+    }
+    
+    throw new Error(`Failed to generate valid mechanics after ${maxRetries} attempts: ${lastError}`);
+  }
+
+  /**
    * Sleep helper for retry delays
    */
   private sleep(ms: number): Promise<void> {
