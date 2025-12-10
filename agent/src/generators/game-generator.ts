@@ -187,7 +187,7 @@ export class GameGenerator {
       await fs.ensureDir(path.join(projectPath, dir));
     }
 
-    // Create package.json with SDK 54 compatible dependencies
+    // Create package.json with SDK 54 compatible dependencies (latest stable)
     const packageJson = {
       name: path.basename(projectPath),
       version: '1.0.0',
@@ -211,7 +211,7 @@ export class GameGenerator {
         'react-dom': '19.0.0',
         'react-native': '0.79.2',
         'react-native-gesture-handler': '~2.24.0',
-        'react-native-reanimated': '~3.17.4',
+        'react-native-reanimated': '~3.17.0',
         'react-native-safe-area-context': '5.4.0',
         'react-native-screens': '~4.10.0',
         'react-native-web': '~0.20.0'
@@ -430,10 +430,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
       - run: npm ci
       - run: npm test
@@ -444,14 +444,14 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
       - uses: expo/expo-github-action@v8
         with:
-          expo-version: latest
+          eas-version: latest
           token: \${{ secrets.EXPO_TOKEN }}
       - run: npm ci
       - run: eas build --platform android --profile production --non-interactive
@@ -469,7 +469,7 @@ jobs:
           node-version: '18'
       - uses: expo/expo-github-action@v8
         with:
-          expo-version: latest
+          eas-version: latest
           token: \${{ secrets.EXPO_TOKEN }}
       - run: npm ci
       - run: eas submit --platform android --latest --non-interactive

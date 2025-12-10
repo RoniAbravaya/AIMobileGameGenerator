@@ -228,6 +228,8 @@ Requirements:
 - Framework: Expo SDK 54, React Native 0.79, TypeScript
 - Target Platform: Android (Expo Go compatible)
 - NO native modules that require custom builds (no react-native-google-mobile-ads, no expo-linear-gradient, no @expo/vector-icons)
+- DO NOT use require() for images - use placeholder colors or simple shapes instead
+- DO NOT reference any asset files that don't exist
 
 Game Structure:
 1. Create a functional game with proper game loop
