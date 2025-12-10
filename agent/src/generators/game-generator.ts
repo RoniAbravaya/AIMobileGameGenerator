@@ -9,12 +9,14 @@ import { GameConfig, GameType, GameStatus, WorkflowResult } from '../types/index
 import { AIService } from '../services/ai.service.js';
 import { GitHubService } from '../services/github.service.js';
 import { EASService } from '../services/eas.service.js';
+import { ImageService } from '../services/image.service.js';
 import { logger } from '../utils/logger.js';
 
 export class GameGenerator {
   private aiService: AIService;
   private githubService: GitHubService;
   private easService: EASService;
+  private imageService: ImageService;
   private templatePath: string;
   private outputDir: string;
   private packagePrefix: string;
@@ -30,6 +32,7 @@ export class GameGenerator {
     this.aiService = aiService;
     this.githubService = githubService;
     this.easService = easService;
+    this.imageService = new ImageService();
     this.templatePath = templatePath;
     this.outputDir = outputDir;
     this.packagePrefix = packagePrefix;
@@ -86,13 +89,22 @@ export class GameGenerator {
       await this.applyGeneratedCode(localPath, aiResponse.code);
       await this.applyGeneratedTests(localPath, aiResponse.tests);
 
-      // Step 4: Update configuration files
-      logger.step(4, 7, 'Updating configuration');
-      await this.updateAppConfig(localPath, name, packageName);
+      // Step 4: Generate AI images
+      logger.step(4, 8, 'Generating AI images for splash and icon');
+      const assetsDir = path.join(localPath, 'assets', 'generated');
+      const imageResult = await this.imageService.generateGameAssets({
+        gameType: type,
+        theme,
+        styleKeywords: mechanics
+      }, assetsDir);
+
+      // Step 5: Update configuration files
+      logger.step(5, 8, 'Updating configuration');
+      await this.updateAppConfig(localPath, name, packageName, imageResult, type);
       await this.addEASConfig(localPath, packageName);
 
-      // Step 5: Create GitHub repository
-      logger.step(5, 7, 'Creating GitHub repository');
+      // Step 6: Create GitHub repository
+      logger.step(6, 8, 'Creating GitHub repository');
       const repoUrl = await this.githubService.createRepository({
         name: repoName,
         description: `${name} - ${theme} ${type} game`,
@@ -100,12 +112,12 @@ export class GameGenerator {
         autoInit: false
       });
 
-      // Step 6: Add GitHub Actions workflow
-      logger.step(6, 7, 'Adding CI/CD workflow');
+      // Step 7: Add GitHub Actions workflow
+      logger.step(7, 8, 'Adding CI/CD workflow');
       await this.addCICDWorkflow(localPath);
 
-      // Step 7: Push to GitHub
-      logger.step(7, 7, 'Pushing to GitHub');
+      // Step 8: Push to GitHub
+      logger.step(8, 8, 'Pushing to GitHub');
       await this.githubService.initAndPush(
         localPath,
         repoUrl,
@@ -287,7 +299,13 @@ export class GameGenerator {
   /**
    * Update app.json configuration
    */
-  private async updateAppConfig(projectPath: string, name: string, packageName: string): Promise<void> {
+  private async updateAppConfig(
+    projectPath: string,
+    name: string,
+    packageName: string,
+    imageResult: any,
+    gameType: string
+  ): Promise<void> {
     const appJsonPath = path.join(projectPath, 'app.json');
     const appJson = await fs.readJson(appJsonPath);
 
@@ -299,6 +317,28 @@ export class GameGenerator {
     // Add AdMob configuration
     appJson.expo.android.config = appJson.expo.android.config || {};
     appJson.expo.android.config.googleMobileAdsAppId = process.env.ADMOB_APP_ID || '';
+
+    // Configure splash screen with generated image
+    if (imageResult.splashPath) {
+      appJson.expo.splash = {
+        image: './assets/generated/splash.png',
+        resizeMode: 'cover',
+        backgroundColor: '#1a1a2e'
+      };
+    }
+
+    // Configure icon with generated image
+    if (imageResult.iconPath) {
+      appJson.expo.icon = './assets/generated/icon.png';
+      appJson.expo.android.adaptiveIcon = {
+        foregroundImage: './assets/generated/icon.png',
+        backgroundColor: '#1a1a2e'
+      };
+    }
+
+    // Set game type in extra config
+    appJson.expo.extra = appJson.expo.extra || {};
+    appJson.expo.extra.gameType = gameType;
 
     await fs.writeJson(appJsonPath, appJson, { spaces: 2 });
   }

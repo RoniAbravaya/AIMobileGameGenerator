@@ -61,9 +61,15 @@ export class Orchestrator {
     const spinner = ora('Generating game...').start();
 
     try {
+      logger.info(`Game Type: ${type}`);
+      logger.info(`Theme: ${theme}`);
+      logger.info(`Mechanics: ${mechanics.join(', ')}`);
+      
       const result = await this.gameGenerator.generateGame(name, type, theme, mechanics);
       
       if (result.success && result.gameId) {
+        const packageName = `${process.env.GOOGLE_PLAY_PACKAGE_PREFIX || 'com.aigames'}.${type}${result.gameId.replace(/-/g, '')}`;
+        
         // Save game config to database
         await this.saveGameConfig({
           id: result.gameId,
@@ -71,7 +77,7 @@ export class Orchestrator {
           type,
           theme,
           mechanics,
-          packageName: `com.aigames.${type}${result.gameId}`,
+          packageName,
           repoName: `game-${result.gameId}-${type}`,
           status: GameStatus.TESTING,
           createdAt: new Date()

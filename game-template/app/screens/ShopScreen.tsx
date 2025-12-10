@@ -3,7 +3,7 @@
  * In-app purchase screen for coins and lives
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,8 @@ import {
   Alert
 } from 'react-native';
 import { useGameState } from '../hooks/useGameState';
-import { useIAP } from '../hooks/useIAP';
+import { purchaseCoins, purchaseLives, getAllProducts, IAP_PRODUCTS } from '../monetization/iap';
+import { IAPConfig } from '../monetization/config';
 
 interface ShopScreenProps {
   onClose: () => void;
@@ -22,10 +23,12 @@ interface ShopScreenProps {
 
 const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
   const { state, addCoins, addLives } = useGameState();
-  const { products, isPurchasing, isInitialized, purchaseCoins, purchaseLives, getProduct } = useIAP();
+  const [isPurchasing, setIsPurchasing] = useState(false);
 
   const handlePurchaseCoins = async (sku: string) => {
+    setIsPurchasing(true);
     const result = await purchaseCoins(sku);
+    setIsPurchasing(false);
     
     if (result.success && result.coins) {
       addCoins(result.coins);
@@ -36,7 +39,9 @@ const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
   };
 
   const handlePurchaseLives = async () => {
+    setIsPurchasing(true);
     const result = await purchaseLives();
+    setIsPurchasing(false);
     
     if (result.success && result.lives) {
       addLives(result.lives);
@@ -47,8 +52,8 @@ const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
   };
 
   const formatPrice = (sku: string): string => {
-    const product = getProduct(sku);
-    return product?.localizedPrice || '$0.99';
+    const product = getAllProducts().find(p => p.productId === sku);
+    return product?.localizedPrice || IAPConfig.products[sku as keyof typeof IAPConfig.products]?.price || '$0.99';
   };
 
   return (
@@ -79,20 +84,20 @@ const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
         
         <TouchableOpacity
           style={styles.purchaseButton}
-          onPress={() => handlePurchaseCoins('coins_50')}
-          disabled={isPurchasing || !isInitialized}
+          onPress={() => handlePurchaseCoins(IAP_PRODUCTS.COINS_50)}
+          disabled={isPurchasing}
         >
           <View style={styles.purchaseInfo}>
             <Text style={styles.purchaseTitle}>🪙 50 Coins</Text>
             <Text style={styles.purchaseDescription}>Get 50 coins</Text>
           </View>
-          <Text style={styles.purchasePrice}>{formatPrice('coins_50')}</Text>
+          <Text style={styles.purchasePrice}>{formatPrice(IAP_PRODUCTS.COINS_50)}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={[styles.purchaseButton, styles.popularButton]}
-          onPress={() => handlePurchaseCoins('coins_100')}
-          disabled={isPurchasing || !isInitialized}
+          onPress={() => handlePurchaseCoins(IAP_PRODUCTS.COINS_100)}
+          disabled={isPurchasing}
         >
           <View style={styles.popularBadge}>
             <Text style={styles.popularText}>POPULAR</Text>
@@ -101,19 +106,19 @@ const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
             <Text style={styles.purchaseTitle}>🪙 100 Coins</Text>
             <Text style={styles.purchaseDescription}>Best value!</Text>
           </View>
-          <Text style={styles.purchasePrice}>{formatPrice('coins_100')}</Text>
+          <Text style={styles.purchasePrice}>{formatPrice(IAP_PRODUCTS.COINS_100)}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.purchaseButton}
-          onPress={() => handlePurchaseCoins('coins_500')}
-          disabled={isPurchasing || !isInitialized}
+          onPress={() => handlePurchaseCoins(IAP_PRODUCTS.COINS_500)}
+          disabled={isPurchasing}
         >
           <View style={styles.purchaseInfo}>
             <Text style={styles.purchaseTitle}>🪙 500 Coins</Text>
             <Text style={styles.purchaseDescription}>Mega pack</Text>
           </View>
-          <Text style={styles.purchasePrice}>{formatPrice('coins_500')}</Text>
+          <Text style={styles.purchasePrice}>{formatPrice(IAP_PRODUCTS.COINS_500)}</Text>
         </TouchableOpacity>
 
         {/* Lives Section */}
@@ -122,18 +127,14 @@ const ShopScreen: React.FC<ShopScreenProps> = ({ onClose }) => {
         <TouchableOpacity
           style={styles.purchaseButton}
           onPress={handlePurchaseLives}
-          disabled={isPurchasing || !isInitialized}
+          disabled={isPurchasing}
         >
           <View style={styles.purchaseInfo}>
             <Text style={styles.purchaseTitle}>❤️ 5 Lives</Text>
             <Text style={styles.purchaseDescription}>Keep playing!</Text>
           </View>
-          <Text style={styles.purchasePrice}>{formatPrice('lives_5')}</Text>
+          <Text style={styles.purchasePrice}>{formatPrice(IAP_PRODUCTS.LIVES_5)}</Text>
         </TouchableOpacity>
-
-        {!isInitialized && (
-          <Text style={styles.loadingText}>Loading shop...</Text>
-        )}
       </ScrollView>
     </SafeAreaView>
   );

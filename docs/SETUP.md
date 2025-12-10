@@ -59,6 +59,12 @@ Complete setup guide for the AI Mobile Game Generator.
    - Generate API key
    - Save securely
 
+7. **Image Generation API Key** (Optional but Recommended)
+   - **OpenAI DALL-E**: Get from [platform.openai.com](https://platform.openai.com)
+   - Generate API key
+   - Note: Without this, games will use placeholder images
+   - Cost: ~$0.04 per image (splash + icon = ~$0.08 per game)
+
 ## Installation
 
 ### 1. Clone the Repository
@@ -95,6 +101,11 @@ Edit `.env` and fill in your credentials:
 ```env
 # AI API Configuration
 ANTHROPIC_API_KEY=sk-ant-xxxxx
+
+# Image Generation API (Optional)
+IMAGE_API_PROVIDER=openai
+IMAGE_API_KEY=sk-xxxxx
+IMAGE_API_BASE_URL=https://api.openai.com/v1/images/generations
 
 # GitHub Configuration
 GITHUB_TOKEN=ghp_xxxxx
@@ -280,12 +291,15 @@ If you encounter issues:
 
 Monthly costs for running 10 games:
 
-- Anthropic API: ~$50-100 (depending on usage)
+- Anthropic API: ~$50-100 (code generation)
+- OpenAI API: ~$1-2 (10 games × $0.08 per game for images)
 - Expo EAS: $29/month (Production plan)
 - Google Play: $25 one-time
 - Google Cloud: ~$0-10 (API calls)
 - AdMob: Free (revenue generating)
-- **Total**: ~$90-150/month + $25 setup
+- **Total**: ~$105-170/month + $25 setup
+
+**Note**: Image generation is one-time per game. Skip it to save costs (uses placeholders instead).
 
 ## Additional Resources
 

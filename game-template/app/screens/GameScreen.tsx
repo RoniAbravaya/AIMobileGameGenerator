@@ -12,9 +12,12 @@ import {
   SafeAreaView,
   Alert
 } from 'react-native';
+import Constants from 'expo-constants';
 import { getLevelById, Level } from '../config/levels';
 import { useGameState } from '../hooks/useGameState';
 import { useAds } from '../hooks/useAds';
+import { GameEngineFactory } from '../game/GameEngineFactory';
+import { GameType } from '../game/config/gameTypes';
 
 interface GameScreenProps {
   levelId: number;
@@ -32,37 +35,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const level = getLevelById(levelId);
   const { state, updateScore, loseLife, completeLevel, setPaused } = useGameState();
   const { showInterstitial } = useAds();
+  
+  // Get game type from app config
+  const gameType = (Constants.expoConfig?.extra?.gameType as GameType) || GameType.RUNNER;
 
-  const [timeRemaining, setTimeRemaining] = useState(level?.timeLimit || 60);
   const [currentScore, setCurrentScore] = useState(0);
-  const [gameActive, setGameActive] = useState(true);
-
-  // Timer countdown
-  useEffect(() => {
-    if (!gameActive || state.isPaused) return;
-
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          handleTimeUp();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [gameActive, state.isPaused]);
-
-  // Handle time up
-  const handleTimeUp = () => {
-    setGameActive(false);
-    if (level && currentScore >= level.targetScore) {
-      handleWin();
-    } else {
-      handleLose();
-    }
-  };
+  const [currentLives, setCurrentLives] = useState(state.lives);
 
   // Handle win
   const handleWin = async () => {
@@ -71,38 +49,42 @@ const GameScreen: React.FC<GameScreenProps> = ({
     const coinsEarned = Math.floor(currentScore / 10);
     await completeLevel(currentScore, coinsEarned);
 
-    Alert.alert(
-      'Level Complete! 🎉',
-      `Score: ${currentScore}\nCoins: ${coinsEarned}`,
-      [
-        {
-          text: 'Continue',
-          onPress: () => {
-            showInterstitial(); // Show ad between levels
-            onLevelComplete();
+    setTimeout(() => {
+      Alert.alert(
+        'Level Complete! 🎉',
+        `Score: ${currentScore}\nCoins: ${coinsEarned}`,
+        [
+          {
+            text: 'Continue',
+            onPress: () => {
+              showInterstitial(); // Show ad between levels
+              onLevelComplete();
+            }
           }
-        }
-      ]
-    );
+        ]
+      );
+    }, 500);
   };
 
   // Handle lose
   const handleLose = () => {
     loseLife();
 
-    if (state.lives <= 1) {
-      Alert.alert(
-        'Game Over',
-        `Final Score: ${currentScore}`,
-        [{ text: 'OK', onPress: onGameOver }]
-      );
-    } else {
-      Alert.alert(
-        'Time Up!',
-        `Score: ${currentScore}\nLives remaining: ${state.lives - 1}`,
-        [{ text: 'Retry', onPress: onExit }]
-      );
-    }
+    setTimeout(() => {
+      if (state.lives <= 1) {
+        Alert.alert(
+          'Game Over',
+          `Final Score: ${currentScore}`,
+          [{ text: 'OK', onPress: onGameOver }]
+        );
+      } else {
+        Alert.alert(
+          'Failed!',
+          `Score: ${currentScore}\nLives remaining: ${state.lives - 1}`,
+          [{ text: 'Retry', onPress: onExit }]
+        );
+      }
+    }, 500);
   };
 
   // Handle pause
@@ -118,13 +100,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
     );
   };
 
-  // Simulate collecting a coin
-  const collectCoin = () => {
-    if (!level || !gameActive || state.isPaused) return;
-    
-    const points = level.coinValue;
-    setCurrentScore((prev) => prev + points);
-    updateScore(points);
+  // Handle score changes from game engine
+  const handleScoreChange = (newScore: number) => {
+    setCurrentScore(newScore);
+    updateScore(newScore);
+  };
+
+  // Handle lives changes from game engine
+  const handleLivesChange = (newLives: number) => {
+    setCurrentLives(newLives);
   };
 
   if (!level) {
@@ -136,134 +120,51 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: level.background }]}>
-      {/* HUD */}
-      <View style={styles.hud}>
-        <View style={styles.hudItem}>
-          <Text style={styles.hudLabel}>Time</Text>
-          <Text style={styles.hudValue}>{timeRemaining}s</Text>
-        </View>
-        <View style={styles.hudItem}>
-          <Text style={styles.hudLabel}>Score</Text>
-          <Text style={styles.hudValue}>{currentScore}/{level.targetScore}</Text>
-        </View>
-        <View style={styles.hudItem}>
-          <Text style={styles.hudLabel}>Lives</Text>
-          <Text style={styles.hudValue}>❤️ {state.lives}</Text>
-        </View>
+    <SafeAreaView style={styles.container}>
+      {/* Pause Button Overlay */}
+      <View style={styles.pauseOverlay}>
         <TouchableOpacity onPress={handlePause} style={styles.pauseButton}>
-          <Text style={styles.pauseText}>⏸</Text>
+          <Text style={styles.pauseText}>⏸ Pause</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Game Area - Placeholder for actual game engine */}
-      <View style={styles.gameArea}>
-        <Text style={styles.levelTitle}>{level.name}</Text>
-        <Text style={styles.instruction}>Tap the button to collect coins!</Text>
-        
-        {/* Simplified gameplay - tap to collect coins */}
-        <TouchableOpacity
-          style={styles.collectButton}
-          onPress={collectCoin}
-          disabled={!gameActive || state.isPaused}
-        >
-          <Text style={styles.collectButtonText}>🪙 Collect Coin</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.note}>
-          This is a placeholder. Replace with actual game engine.
-        </Text>
-      </View>
-
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <View
-          style={[
-            styles.progressBar,
-            { width: `${Math.min((currentScore / level.targetScore) * 100, 100)}%` }
-          ]}
-        />
-      </View>
+      {/* Game Engine */}
+      <GameEngineFactory
+        gameType={gameType}
+        level={level}
+        onScoreChange={handleScoreChange}
+        onLivesChange={handleLivesChange}
+        onWin={handleWin}
+        onLose={handleLose}
+        isPaused={state.isPaused}
+      />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1
+    flex: 1,
+    backgroundColor: '#1a1a2e'
   },
-  hud: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    padding: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)'
-  },
-  hudItem: {
-    alignItems: 'center'
-  },
-  hudLabel: {
-    fontSize: 12,
-    color: '#ccc'
-  },
-  hudValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff'
+  pauseOverlay: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 1000
   },
   pauseButton: {
-    padding: 10
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)'
   },
   pauseText: {
-    fontSize: 24
-  },
-  gameArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20
-  },
-  levelTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
+    fontSize: 16,
     color: '#fff',
-    marginBottom: 20,
-    textAlign: 'center'
-  },
-  instruction: {
-    fontSize: 18,
-    color: '#fff',
-    marginBottom: 30,
-    textAlign: 'center'
-  },
-  collectButton: {
-    backgroundColor: '#4ecca3',
-    paddingHorizontal: 40,
-    paddingVertical: 20,
-    borderRadius: 15,
-    marginBottom: 20
-  },
-  collectButtonText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff'
-  },
-  note: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.5)',
-    textAlign: 'center',
-    marginTop: 20
-  },
-  progressContainer: {
-    height: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    margin: 10,
-    borderRadius: 5,
-    overflow: 'hidden'
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#4ecca3'
+    fontWeight: 'bold'
   },
   errorText: {
     fontSize: 20,

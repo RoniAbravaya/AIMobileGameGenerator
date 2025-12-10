@@ -10,7 +10,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  ScrollView
+  ScrollView,
+  Alert
 } from 'react-native';
 import { LEVELS } from '../config/levels';
 import { useGameState } from '../hooks/useGameState';
@@ -52,27 +53,60 @@ const MenuScreen: React.FC<MenuScreenProps> = ({ onStartLevel, onOpenShop }) => 
         <View style={styles.levelsContainer}>
           {LEVELS.map((level) => {
             const isCompleted = state.completedLevels.includes(level.id);
-            const isLocked = level.id > 1 && !state.completedLevels.includes(level.id - 1);
+            const isUnlocked = level.id === 1 || state.completedLevels.includes(level.id - 1);
+            const canPlay = level.isPlayable && isUnlocked;
+            const isLocked = !level.isPlayable || !isUnlocked;
 
             return (
               <TouchableOpacity
                 key={level.id}
                 style={[
                   styles.levelButton,
-                  isLocked && styles.levelButtonLocked
+                  isLocked && styles.levelButtonLocked,
+                  level.comingSoon && styles.levelButtonComingSoon
                 ]}
-                onPress={() => !isLocked && onStartLevel(level.id)}
-                disabled={isLocked}
+                onPress={() => {
+                  if (level.comingSoon) {
+                    Alert.alert(
+                      '🎮 Coming Soon!',
+                      `${level.name} will be unlocked in a future update. Stay tuned!`,
+                      [{ text: 'OK' }]
+                    );
+                  } else if (canPlay) {
+                    onStartLevel(level.id);
+                  }
+                }}
+                disabled={!canPlay && !level.comingSoon}
               >
                 <View style={styles.levelInfo}>
-                  <Text style={styles.levelNumber}>Level {level.id}</Text>
-                  <Text style={styles.levelName}>{level.name}</Text>
-                  <Text style={styles.levelDifficulty}>
+                  <Text style={[
+                    styles.levelNumber,
+                    isLocked && styles.levelTextLocked
+                  ]}>
+                    Level {level.id}
+                  </Text>
+                  <Text style={[
+                    styles.levelName,
+                    isLocked && styles.levelTextLocked
+                  ]}>
+                    {level.name}
+                  </Text>
+                  <Text style={[
+                    styles.levelDifficulty,
+                    isLocked && styles.levelTextLocked
+                  ]}>
                     {level.difficulty.toUpperCase()}
                   </Text>
                 </View>
-                {isCompleted && <Text style={styles.completedBadge}>✓</Text>}
-                {isLocked && <Text style={styles.lockedBadge}>🔒</Text>}
+                <View style={styles.levelBadges}>
+                  {isCompleted && <Text style={styles.completedBadge}>✓</Text>}
+                  {level.comingSoon && (
+                    <View style={styles.comingSoonBadge}>
+                      <Text style={styles.comingSoonText}>SOON</Text>
+                    </View>
+                  )}
+                  {isLocked && !level.comingSoon && <Text style={styles.lockedBadge}>🔒</Text>}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -153,6 +187,11 @@ const styles = StyleSheet.create({
   levelButtonLocked: {
     opacity: 0.5
   },
+  levelButtonComingSoon: {
+    borderWidth: 2,
+    borderColor: '#e94560',
+    backgroundColor: '#0a2540'
+  },
   levelInfo: {
     flex: 1
   },
@@ -171,12 +210,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#e94560'
   },
+  levelTextLocked: {
+    color: '#666'
+  },
+  levelBadges: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 5
+  },
   completedBadge: {
     fontSize: 30,
     color: '#4ecca3'
   },
   lockedBadge: {
     fontSize: 30
+  },
+  comingSoonBadge: {
+    backgroundColor: '#e94560',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4
+  },
+  comingSoonText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: '#fff'
   },
   shopButton: {
     backgroundColor: '#e94560',

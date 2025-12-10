@@ -77,14 +77,25 @@ npm run dev -- init
 ### Generate Your First Game
 
 ```bash
+# Interactive mode (recommended)
 npm run dev -- generate-game --interactive
+
+# Or specify parameters directly
+npm run dev -- generate-game \
+  --name "Neon Runner" \
+  --type runner \
+  --theme "cyberpunk neon city" \
+  --mechanics "fast-paced, dodging, collecting"
 ```
 
-Follow the prompts to create a game. The AI will:
-- Generate game code
-- Create a GitHub repo
-- Set up CI/CD
-- Push everything to GitHub
+The AI will:
+1. Generate unique game code for the selected type
+2. Create AI-generated splash screen and icon
+3. Configure with your theme
+4. Set up 10 levels (3 playable, 7 "coming soon")
+5. Create a GitHub repo
+6. Set up CI/CD pipeline
+7. Push everything to GitHub
 
 ### Deploy the Game
 
@@ -107,20 +118,29 @@ The system will:
 
 Each generated game includes:
 
-- ✅ 3 levels with progressive difficulty
+- ✅ **10 Levels** (3 playable on launch, 7 "coming soon" for future updates)
+- 🎨 **5 Distinct Game Types** with unique mechanics and visual styles
+- 🖼️ **AI-Generated Splash Screens** unique to each game
 - 💰 Coin collection system
 - ❤️ Lives system (5 lives to start)
 - 🎯 Score tracking and high scores
-- 📱 AdMob banner and interstitial ads
-- 🛒 In-app purchases (coins and lives)
-- 💾 Persistent game state
-- 🧪 Unit test suite
+- 📱 **AdMob** ads (banner + interstitial with smart frequency)
+- 🛒 **In-app purchases** (coins and lives packs)
+- 💾 Persistent game state with AsyncStorage
+- 🧪 Comprehensive unit test suite
+- 🎮 **Fully playable mechanics** for each game type
 
 ## 🔧 CLI Commands
 
 ```bash
-# Generate a new game
-npm run dev -- generate-game --name "Space Runner" --type runner --theme "Space"
+# Generate a new game (choose from 5 game types)
+npm run dev -- generate-game \
+  --name "Neon Runner" \
+  --type runner \
+  --theme "cyberpunk neon city" \
+  --mechanics "fast-paced, dodging"
+
+# Available game types: runner, puzzle, word, card, platformer
 
 # Deploy a game
 npm run dev -- deploy-game --game <game-id>
@@ -128,7 +148,7 @@ npm run dev -- deploy-game --game <game-id>
 # Analyze performance
 npm run dev -- analyze-performance --days 30
 
-# Extend winner with more levels
+# Extend winner with more levels (unlock levels 4-10)
 npm run dev -- extend-game --game <game-id> --levels 10
 
 # Sunset underperforming games
@@ -205,16 +225,39 @@ npm run sunset -- --exclude <winner-id>
 
 ## 🎯 Game Types Supported
 
-1. **Runner** - Endless running with obstacles
-2. **Platformer** - Level-based jumping and climbing
-3. **Puzzle** - Logic and problem-solving
-4. **Match-3** - Matching tile games
-5. **Shooter** - Shoot enemies and avoid bullets
-6. **Casual** - Simple, easy-to-play mechanics
-7. **Arcade** - Fast-paced action
-8. **Racing** - Speed and competition
-9. **Adventure** - Exploration and quests
-10. **Strategy** - Planning and tactics
+### Fully Implemented Game Types
+
+1. **Runner** 🏃 - Neon cyber theme, auto-scrolling with lane-switching mechanics
+   - **Theme**: Neon Cyber (cyan, magenta, neon green)
+   - **Mechanics**: Jump between 3 lanes, avoid obstacles, collect coins
+   - **Visual Style**: Fast, high-contrast, futuristic HUD
+
+2. **Puzzle** 🧩 - Zen-themed match-3 puzzle game
+   - **Theme**: Zen Minimal (soft pastels, calming)
+   - **Mechanics**: Swap adjacent tiles, match 3+ of same color
+   - **Visual Style**: Slow animations, minimal UI, peaceful
+
+3. **Word** 📝 - Tower-style word puzzle game
+   - **Theme**: Clean Typography (black/white with blue accent)
+   - **Mechanics**: Form words from letter grid
+   - **Visual Style**: Clear fonts, grid-based, modern
+
+4. **Card** 🃏 - Pazaak-style card duel game
+   - **Theme**: Tabletop (green felt, gold accents)
+   - **Mechanics**: Strategic card play, reach 20 without busting
+   - **Visual Style**: Casino aesthetic, card flip animations
+
+5. **Platformer** 🪂 - Classic 2D platformer
+   - **Theme**: Adventure (nature tones, cheerful)
+   - **Mechanics**: Jump, move left/right, reach the flag
+   - **Visual Style**: Bouncy animations, cartoon-like
+
+### Visual Diversity
+Each game type has:
+- ✨ Unique color palette
+- 🎨 Custom UI layout
+- ⚡ Distinctive animation style
+- 🖼️ Theme-specific AI-generated assets
 
 ## 💰 Monetization
 
@@ -285,13 +328,16 @@ Never commit:
 
 Monthly operational costs:
 
-- **Anthropic API**: ~$50-100
+- **Anthropic API** (code generation): ~$50-100
+- **OpenAI API** (image generation): ~$20-40 (optional)
 - **Expo EAS**: $29/month
 - **Google Play**: $25 one-time
 - **Google Cloud**: ~$5-10
 - **GitHub**: Free (public repos)
 
-**Total**: ~$90-150/month + $25 setup
+**Total**: ~$130-200/month + $25 setup
+
+**Note**: Image generation is optional. Without it, games use fallback placeholder images.
 
 ## 🛠️ Technology Stack
 
@@ -334,25 +380,30 @@ MIT License - see LICENSE file for details
 ## 🚦 Project Status
 
 ✅ **Core Features Complete**
-- [x] AI code generation
+- [x] AI code generation (game logic)
+- [x] **AI image generation (splash screens & icons)**
+- [x] **5 fully playable game types**
+- [x] **10-level system (3 playable, 7 locked)**
 - [x] GitHub integration
-- [x] EAS builds
+- [x] EAS builds & deployment
 - [x] Google Play submission
-- [x] AdMob integration
-- [x] IAP integration
+- [x] **Clean monetization API** (AdMob + IAP)
 - [x] Analytics framework
-- [x] CLI interface
+- [x] CLI interface with game type selection
+- [x] Comprehensive test suite
 
-🔄 **In Progress**
-- [ ] Advanced game templates
-- [ ] iOS support
-- [ ] Backend integration (leaderboards)
+🔄 **Ready for Use**
+- ✅ Generate diverse, playable games
+- ✅ Each game has unique visuals
+- ✅ Automated deployment pipeline
+- ✅ Winner selection & extension workflow
 
-💡 **Planned**
-- [ ] Visual asset generation (DALL-E)
+💡 **Future Enhancements**
+- [ ] iOS support (App Store)
+- [ ] Backend integration (leaderboards, cloud save)
 - [ ] Localization (10+ languages)
 - [ ] A/B testing framework
-- [ ] Advanced ASO
+- [ ] More game types (shooter, racing, strategy)
 
 ---
 

@@ -10,6 +10,8 @@ import MenuScreen from './screens/MenuScreen';
 import GameScreen from './screens/GameScreen';
 import ShopScreen from './screens/ShopScreen';
 import { useGameState } from './hooks/useGameState';
+import { initializeAds } from './monetization/ads';
+import { initializeIAP } from './monetization/iap';
 
 type Screen = 'menu' | 'game' | 'shop';
 
@@ -18,9 +20,15 @@ export default function App() {
   const [selectedLevel, setSelectedLevel] = useState<number>(1);
   const { loadState, startLevel } = useGameState();
 
-  // Load saved state on mount
+  // Load saved state and initialize monetization on mount
   useEffect(() => {
     loadState();
+    
+    // Initialize monetization systems
+    initializeAds();
+    initializeIAP().catch(error => {
+      console.error('Failed to initialize IAP:', error);
+    });
   }, []);
 
   const handleStartLevel = (levelId: number) => {

@@ -3,11 +3,51 @@
  * Tests for core game functionality
  */
 
-import { LEVELS, getLevelById, getNextLevel, getTotalLevels } from '../app/config/levels';
+import { 
+  LEVELS, 
+  getLevelById, 
+  getNextLevel, 
+  getTotalLevels,
+  getPlayableLevels,
+  getLockedLevels,
+  isLevelPlayable,
+  isLevelUnlocked
+} from '../app/config/levels';
 
 describe('Level Configuration', () => {
-  it('should have 3 levels defined', () => {
-    expect(LEVELS).toHaveLength(3);
+  it('should have 10 levels defined', () => {
+    expect(LEVELS).toHaveLength(10);
+  });
+
+  it('should have exactly 3 playable levels', () => {
+    const playable = getPlayableLevels();
+    expect(playable).toHaveLength(3);
+    expect(playable.map(l => l.id)).toEqual([1, 2, 3]);
+  });
+
+  it('should have exactly 7 locked levels', () => {
+    const locked = getLockedLevels();
+    expect(locked).toHaveLength(7);
+    expect(locked.every(l => l.comingSoon)).toBe(true);
+  });
+
+  it('should mark levels 1-3 as playable', () => {
+    expect(isLevelPlayable(1)).toBe(true);
+    expect(isLevelPlayable(2)).toBe(true);
+    expect(isLevelPlayable(3)).toBe(true);
+  });
+
+  it('should mark levels 4-10 as not playable', () => {
+    for (let i = 4; i <= 10; i++) {
+      expect(isLevelPlayable(i)).toBe(false);
+    }
+  });
+
+  it('should mark levels 4-10 as coming soon', () => {
+    for (let i = 4; i <= 10; i++) {
+      const level = getLevelById(i);
+      expect(level?.comingSoon).toBe(true);
+    }
   });
 
   it('should get level by id', () => {
@@ -35,7 +75,7 @@ describe('Level Configuration', () => {
 
   it('should return correct total levels count', () => {
     const total = getTotalLevels();
-    expect(total).toBe(3);
+    expect(total).toBe(10);
   });
 
   it('should have progressive difficulty', () => {
@@ -72,6 +112,27 @@ describe('Game State Logic', () => {
     const score = 155;
     const coins = Math.floor(score / 10);
     expect(coins).toBe(15); // Not 15.5
+  });
+});
+
+describe('Level Unlock Logic', () => {
+  it('should have level 1 always unlocked', () => {
+    expect(isLevelUnlocked(1, [])).toBe(true);
+  });
+
+  it('should unlock level 2 when level 1 is completed', () => {
+    expect(isLevelUnlocked(2, [1])).toBe(true);
+    expect(isLevelUnlocked(2, [])).toBe(false);
+  });
+
+  it('should unlock level 3 when level 2 is completed', () => {
+    expect(isLevelUnlocked(3, [1, 2])).toBe(true);
+    expect(isLevelUnlocked(3, [1])).toBe(false);
+  });
+
+  it('should not unlock non-playable levels', () => {
+    expect(isLevelUnlocked(4, [1, 2, 3])).toBe(false);
+    expect(isLevelUnlocked(10, [1, 2, 3, 4, 5, 6, 7, 8, 9])).toBe(false);
   });
 });
 
