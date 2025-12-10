@@ -123,11 +123,26 @@ export class GitHubService {
       await git.addConfig('user.email', gitEmail, false, 'local');
       await git.addConfig('user.name', gitName, false, 'local');
 
+      // Configure git to use the token for HTTPS authentication
+      const gitToken = process.env.GIT_TOKEN;
+      if (gitToken) {
+        await git.addConfig('credential.helper', 'store', false, 'local');
+        // Store credentials for this remote
+        const credsFile = path.join(process.env.HOME || '~', '.git-credentials');
+        const credsUrl = `https://${this.owner}:${gitToken}@github.com`;
+        await fs.ensureFile(credsFile);
+        await fs.writeFile(credsFile, credsUrl, { mode: 0o600 });
+      }
+
       // Set default branch to main
       await git.branch(['-M', 'main']);
 
-      // Add remote
-      await git.addRemote('origin', repoUrl);
+      // Add remote with token embedded in URL for HTTPS auth
+      let authenticatedUrl = repoUrl;
+      if (gitToken && repoUrl.startsWith('https://')) {
+        authenticatedUrl = repoUrl.replace('https://', `https://${this.owner}:${gitToken}@`);
+      }
+      await git.addRemote('origin', authenticatedUrl);
 
       // Stage all files using --force to bypass parent .gitignore
       await git.raw(['add', '--force', '.']);

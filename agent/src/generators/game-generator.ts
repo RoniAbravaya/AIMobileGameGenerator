@@ -315,6 +315,7 @@ export class GameGenerator {
 
     appJson.expo.name = name;
     appJson.expo.slug = name.toLowerCase().replace(/\s+/g, '-');
+    appJson.expo.runtimeVersion = { policy: 'appVersion' };
     appJson.expo.android = appJson.expo.android || {};
     appJson.expo.android.package = packageName;
 
@@ -340,9 +341,12 @@ export class GameGenerator {
       };
     }
 
-    // Set game type in extra config
+    // Set game type and EAS project ID in extra config
     appJson.expo.extra = appJson.expo.extra || {};
     appJson.expo.extra.gameType = gameType;
+    // Generate a unique EAS project ID (valid UUID format)
+    appJson.expo.extra.eas = appJson.expo.extra.eas || {};
+    appJson.expo.extra.eas.projectId = uuidv4();
 
     await fs.writeJson(appJsonPath, appJson, { spaces: 2 });
   }
@@ -353,7 +357,8 @@ export class GameGenerator {
   private async addEASConfig(projectPath: string, packageName: string): Promise<void> {
     const easJson = {
       cli: {
-        version: '>= 5.0.0'
+        version: '>= 5.0.0',
+        appVersionSource: 'local'
       },
       build: {
         development: {
@@ -368,7 +373,7 @@ export class GameGenerator {
         },
         production: {
           android: {
-            buildType: 'aab'
+            buildType: 'app-bundle'
           }
         }
       },
