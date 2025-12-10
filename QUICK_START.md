@@ -59,7 +59,7 @@ IMAGE_API_PROVIDER=openai
 
 # Optional: GitHub token for automated repo creation
 GIT_TOKEN=ghp_xxxxx
-GITHUB_ORG=your-username
+GIT_ORG=your-username
 
 # Optional: Expo token for builds
 EXPO_TOKEN=xxxxx

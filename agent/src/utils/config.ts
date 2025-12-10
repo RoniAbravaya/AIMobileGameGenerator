@@ -20,7 +20,7 @@ loadEnv({ path: envPath });
 export function getConfig(): AgentConfig {
   const requiredVars = [
     'GIT_TOKEN',
-    'GITHUB_ORG',
+    'GIT_ORG',
     'EXPO_TOKEN',
     'ANTHROPIC_API_KEY'
   ];
@@ -32,7 +32,7 @@ export function getConfig(): AgentConfig {
 
   return {
     githubToken: process.env.GIT_TOKEN!,
-    githubOrg: process.env.GITHUB_ORG!,
+    githubOrg: process.env.GIT_ORG!,
     expoToken: process.env.EXPO_TOKEN!,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY!,
     googlePlayServiceAccountPath: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_KEY_PATH || './secrets/google-play-key.json',

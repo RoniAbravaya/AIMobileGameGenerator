@@ -109,7 +109,7 @@ IMAGE_API_BASE_URL=https://api.openai.com/v1/images/generations
 
 # GitHub Configuration
 GIT_TOKEN=ghp_xxxxx
-GITHUB_ORG=your-github-username
+GIT_ORG=your-github-username
 
 # Expo/EAS Configuration
 EXPO_TOKEN=xxxxx
