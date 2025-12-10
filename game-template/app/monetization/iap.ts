@@ -1,17 +1,10 @@
 /**
  * In-App Purchase Wrapper
  * Clean API for handling purchases
+ * 
+ * Note: Uses mocks in development/Expo Go. For production builds, 
+ * replace with real react-native-iap implementation.
  */
-
-import {
-  initConnection,
-  endConnection,
-  getProducts,
-  requestPurchase,
-  finishTransaction,
-  Product,
-  Purchase
-} from 'react-native-iap';
 
 // Product SKUs
 export const IAP_PRODUCTS = {
@@ -21,10 +14,28 @@ export const IAP_PRODUCTS = {
   LIVES_5: 'lives_5'
 } as const;
 
-const PRODUCT_SKUS = Object.values(IAP_PRODUCTS);
+// IAP is mocked for Expo Go compatibility
+const IAP_ENABLED = false;
+
+// Mock Product interface
+export interface Product {
+  productId: string;
+  title: string;
+  description: string;
+  price: string;
+  localizedPrice: string;
+}
+
+// Mock products for development
+const MOCK_PRODUCTS: Product[] = [
+  { productId: 'coins_50', title: '50 Coins', description: 'Get 50 coins', price: '0.99', localizedPrice: '$0.99' },
+  { productId: 'coins_100', title: '100 Coins', description: 'Get 100 coins', price: '1.99', localizedPrice: '$1.99' },
+  { productId: 'coins_500', title: '500 Coins', description: 'Get 500 coins', price: '4.99', localizedPrice: '$4.99' },
+  { productId: 'lives_5', title: '5 Lives', description: 'Get 5 extra lives', price: '0.99', localizedPrice: '$0.99' }
+];
 
 let isInitialized = false;
-let availableProducts: Product[] = [];
+let availableProducts: Product[] = MOCK_PRODUCTS;
 
 export interface PurchaseResult {
   success: boolean;
@@ -39,25 +50,32 @@ export interface PurchaseResult {
  * Call once at app startup
  */
 export async function initializeIAP(): Promise<boolean> {
-  try {
-    await initConnection();
+  if (!IAP_ENABLED) {
+    console.log('[IAP] Using mock purchases for development');
     isInitialized = true;
-
-    // Load available products
-    availableProducts = await getProducts({ skus: PRODUCT_SKUS });
-    
     return true;
-  } catch (error) {
-    console.error('Failed to initialize IAP:', error);
-    return false;
   }
+
+  // In production builds with react-native-iap:
+  // try {
+  //   await initConnection();
+  //   isInitialized = true;
+  //   availableProducts = await getProducts({ skus: Object.values(IAP_PRODUCTS) });
+  //   return true;
+  // } catch (error) {
+  //   console.error('Failed to initialize IAP:', error);
+  //   return false;
+  // }
+  
+  return false;
 }
 
 /**
  * Clean up IAP connection
  */
 export function cleanupIAP(): void {
-  endConnection();
+  // In production: endConnection();
+  console.log('[IAP] Cleanup (no-op in development)');
 }
 
 /**
@@ -68,10 +86,11 @@ export async function purchaseCoins(sku: string): Promise<PurchaseResult> {
     return { success: false, error: 'IAP not initialized' };
   }
 
-  try {
-    await requestPurchase({ sku });
+  if (!IAP_ENABLED) {
+    // Mock purchase for development
+    console.log(`[IAP] Mock purchase: ${sku}`);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate delay
 
-    // Determine coins amount
     let coins = 0;
     if (sku === IAP_PRODUCTS.COINS_50) coins = 50;
     else if (sku === IAP_PRODUCTS.COINS_100) coins = 100;
@@ -82,12 +101,18 @@ export async function purchaseCoins(sku: string): Promise<PurchaseResult> {
       productId: sku,
       coins
     };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message || 'Purchase failed'
-    };
   }
+
+  // Production code (when react-native-iap is available):
+  // try {
+  //   await requestPurchase({ sku });
+  //   ... determine coins from sku
+  //   return { success: true, productId: sku, coins };
+  // } catch (error: any) {
+  //   return { success: false, error: error.message };
+  // }
+
+  return { success: false, error: 'IAP not available' };
 }
 
 /**
@@ -98,20 +123,27 @@ export async function purchaseLives(): Promise<PurchaseResult> {
     return { success: false, error: 'IAP not initialized' };
   }
 
-  try {
-    await requestPurchase({ sku: IAP_PRODUCTS.LIVES_5 });
+  if (!IAP_ENABLED) {
+    // Mock purchase for development
+    console.log('[IAP] Mock purchase: lives_5');
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate delay
 
     return {
       success: true,
       productId: IAP_PRODUCTS.LIVES_5,
       lives: 5
     };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message || 'Purchase failed'
-    };
   }
+
+  // Production code (when react-native-iap is available):
+  // try {
+  //   await requestPurchase({ sku: IAP_PRODUCTS.LIVES_5 });
+  //   return { success: true, productId: IAP_PRODUCTS.LIVES_5, lives: 5 };
+  // } catch (error: any) {
+  //   return { success: false, error: error.message };
+  // }
+
+  return { success: false, error: 'IAP not available' };
 }
 
 /**
@@ -130,11 +162,12 @@ export function getAllProducts(): Product[] {
 
 /**
  * Finish a transaction (acknowledge purchase)
+ * No-op in development mode
  */
-export async function acknowledgePurchase(purchase: Purchase): Promise<void> {
-  try {
-    await finishTransaction({ purchase, isConsumable: true });
-  } catch (error) {
-    console.error('Failed to finish transaction:', error);
+export async function acknowledgePurchase(purchase: any): Promise<void> {
+  if (IAP_ENABLED) {
+    // Production code:
+    // await finishTransaction({ purchase, isConsumable: true });
   }
+  console.log('[IAP] Acknowledge purchase (no-op in development)');
 }

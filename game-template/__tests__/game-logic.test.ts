@@ -69,8 +69,14 @@ describe('Level Configuration', () => {
   });
 
   it('should return undefined when no next level exists', () => {
-    const nextLevel = getNextLevel(3);
+    const nextLevel = getNextLevel(10); // Level 10 is the last level
     expect(nextLevel).toBeUndefined();
+  });
+
+  it('should get next level when it exists', () => {
+    const nextLevel = getNextLevel(3);
+    expect(nextLevel).toBeDefined();
+    expect(nextLevel?.id).toBe(4);
   });
 
   it('should return correct total levels count', () => {
