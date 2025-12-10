@@ -63,7 +63,7 @@ export default function App() {
       
       {currentScreen === 'menu' && (
         <MenuScreen
-          onStartLevel={handleStartLevel}
+          onStartGame={handleStartLevel}
           onOpenShop={handleOpenShop}
         />
       )}

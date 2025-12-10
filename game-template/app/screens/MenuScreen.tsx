@@ -1,112 +1,261 @@
 /**
  * Menu Screen
- * Main menu with play, settings, and other options
+ * Main menu with level selection and shop access
  */
 
-import React from 'react';
-import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
-import { ThemedText, ThemedButton, ThemedCard } from '../components/ThemedUI';
-import { colors, spacing } from '../theme/generatedTheme';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 export interface MenuScreenProps {
-  gameName: string;
-  onPlay: () => void;
-  onSettings?: () => void;
-  onAbout?: () => void;
+  onStartGame: (level: number) => void;
+  onOpenShop: () => void;
 }
 
-export default function MenuScreen({
-  gameName,
-  onPlay,
-  onSettings,
-  onAbout
-}: MenuScreenProps) {
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+interface GameProgress {
+  highScore: number;
+  coins: number;
+  lives: number;
+  unlockedLevels: number;
+  completedLevels: boolean[];
+}
+
+export default function MenuScreen({ onStartGame, onOpenShop }: MenuScreenProps) {
+  const [gameProgress, setGameProgress] = useState<GameProgress>({
+    highScore: 0,
+    coins: 0,
+    lives: 5,
+    unlockedLevels: 1,
+    completedLevels: [false, false, false]
+  });
+
+  // Load saved game progress on component mount
+  useEffect(() => {
+    loadGameProgress();
+  }, []);
+
+  const loadGameProgress = async (): Promise<void> => {
+    try {
+      const savedProgress = await AsyncStorage.getItem('gameProgress');
+      if (savedProgress) {
+        const progress: GameProgress = JSON.parse(savedProgress);
+        setGameProgress(progress);
+      }
+    } catch (error) {
+      console.error('Failed to load game progress:', error);
+    }
+  };
+
+  const handleLevelSelect = (level: number): void => {
+    if (level <= gameProgress.unlockedLevels) {
+      if (gameProgress.lives <= 0) {
+        Alert.alert('No Lives Left', 'You need to buy more lives from the shop or wait for them to regenerate.');
+        return;
+      }
+      onStartGame(level);
+    } else {
+      Alert.alert('Level Locked', `Complete level ${level - 1} to unlock this level.`);
+    }
+  };
+
+  const renderLevelButton = (level: number): JSX.Element => {
+    const isUnlocked = level <= gameProgress.unlockedLevels;
+    const isCompleted = gameProgress.completedLevels[level - 1];
+    
+    return (
+      <TouchableOpacity
+        key={level}
+        style={[
+          styles.levelButton,
+          !isUnlocked && styles.levelButtonLocked,
+          isCompleted && styles.levelButtonCompleted
+        ]}
+        onPress={() => handleLevelSelect(level)}
+        disabled={!isUnlocked}
       >
-        {/* Game title */}
-        <View style={styles.titleContainer}>
-          <ThemedText variant="title" bold align="center">
-            {gameName}
-          </ThemedText>
-        </View>
+        <Text style={[
+          styles.levelButtonText,
+          !isUnlocked && styles.levelButtonTextLocked
+        ]}>
+          Level {level}
+        </Text>
+        {isCompleted && (
+          <Text style={styles.completedText}>★</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
-        {/* Main menu card */}
-        <ThemedCard variant="elevated" style={styles.menuCard}>
-          <View style={styles.buttonContainer}>
-            <ThemedButton
-              title="Play"
-              variant="primary"
-              size="large"
-              onPress={onPlay}
-              style={styles.button}
-            />
+  return (
+    <View style={styles.container}>
+      {/* Background decoration */}
+      <View style={styles.backgroundDecor}>
+        <View style={[styles.circle, styles.circle1]} />
+        <View style={[styles.circle, styles.circle2]} />
+      </View>
 
-            {onSettings && (
-              <ThemedButton
-                title="Settings"
-                variant="secondary"
-                size="medium"
-                onPress={onSettings}
-                style={styles.button}
-              />
-            )}
+      <View style={styles.content}>
+        <Text style={styles.title}>GAME</Text>
+        <Text style={styles.subtitle}>Template Game</Text>
 
-            {onAbout && (
-              <ThemedButton
-                title="About"
-                variant="secondary"
-                size="medium"
-                onPress={onAbout}
-                style={styles.button}
-              />
-            )}
+        {/* Game Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>High Score</Text>
+            <Text style={styles.statValue}>{gameProgress.highScore}</Text>
           </View>
-        </ThemedCard>
-
-        {/* Footer */}
-        <View style={styles.footer}>
-          <ThemedText variant="caption" color={colors.textSecondary} align="center">
-            Generated by AI Game Generator
-          </ThemedText>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Coins</Text>
+            <Text style={styles.statValue}>{gameProgress.coins}</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statLabel}>Lives</Text>
+            <Text style={styles.statValue}>{gameProgress.lives}</Text>
+          </View>
         </View>
-      </ScrollView>
+
+        {/* Level Selection */}
+        <View style={styles.levelsContainer}>
+          <Text style={styles.levelsTitle}>Select Level</Text>
+          <View style={styles.levelButtons}>
+            {[1, 2, 3].map(level => renderLevelButton(level))}
+          </View>
+        </View>
+
+        {/* Shop Button */}
+        <TouchableOpacity style={styles.shopButton} onPress={onOpenShop}>
+          <Text style={styles.shopButtonText}>Shop</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1
+    flex: 1,
+    backgroundColor: '#1a1a2e',
   },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+  backgroundDecor: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+  },
+  circle: {
+    position: 'absolute',
+    borderRadius: 999,
+    opacity: 0.1,
+  },
+  circle1: {
+    width: 300,
+    height: 300,
+    backgroundColor: '#e94560',
+    top: -50,
+    right: -100,
+  },
+  circle2: {
+    width: 200,
+    height: 200,
+    backgroundColor: '#0f3460',
+    bottom: 100,
+    left: -50,
+  },
+  content: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing('huge'),
-    minHeight: height * 0.9
+    justifyContent: 'center',
+    paddingHorizontal: 20,
   },
-  titleContainer: {
-    marginBottom: spacing('huge'),
-    paddingHorizontal: spacing('large')
+  title: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#e94560',
+    marginBottom: 10,
+    textAlign: 'center',
   },
-  menuCard: {
-    width: '85%',
-    maxWidth: 400
+  subtitle: {
+    fontSize: 16,
+    color: '#ffffff',
+    marginBottom: 40,
+    textAlign: 'center',
   },
-  buttonContainer: {
-    gap: spacing('medium')
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 40,
+    paddingHorizontal: 20,
   },
-  button: {
-    width: '100%'
+  statItem: {
+    alignItems: 'center',
   },
-  footer: {
-    marginTop: spacing('huge'),
-    paddingHorizontal: spacing('large')
-  }
+  statLabel: {
+    fontSize: 12,
+    color: '#aaaaaa',
+    marginBottom: 5,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#e94560',
+  },
+  levelsContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  levelsTitle: {
+    fontSize: 20,
+    color: '#ffffff',
+    marginBottom: 20,
+  },
+  levelButtons: {
+    flexDirection: 'row',
+    gap: 15,
+  },
+  levelButton: {
+    backgroundColor: '#16213e',
+    paddingVertical: 15,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#e94560',
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  levelButtonLocked: {
+    backgroundColor: '#333333',
+    borderColor: '#666666',
+  },
+  levelButtonCompleted: {
+    backgroundColor: '#2a4a2a',
+    borderColor: '#00ff00',
+  },
+  levelButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  levelButtonTextLocked: {
+    color: '#666666',
+  },
+  completedText: {
+    fontSize: 16,
+    color: '#00ff00',
+    marginTop: 2,
+  },
+  shopButton: {
+    backgroundColor: '#e94560',
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#ff6b8a',
+  },
+  shopButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
 });

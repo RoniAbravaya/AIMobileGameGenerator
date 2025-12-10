@@ -249,38 +249,55 @@ Technical Requirements:
 - Follow React Native best practices
 - Use only these dependencies: react, react-native, expo, expo-router, expo-status-bar, @react-native-async-storage/async-storage, react-native-safe-area-context
 
+CRITICAL COMPONENT INTERFACE REQUIREMENTS:
+The app/index.tsx will pass these EXACT props to screens. You MUST use these prop names:
+
+MenuScreen props (MUST match exactly):
+- onStartGame: (level: number) => void  // Called when user starts a level
+- onOpenShop: () => void                // Called when user opens shop
+
+GameScreen props (MUST match exactly):
+- levelId: number                       // Current level being played
+- onLevelComplete: () => void           // Called when level is completed
+- onGameOver: () => void                // Called on game over
+- onExit: () => void                    // Called when exiting to menu
+
+ShopScreen props (MUST match exactly):
+- onClose: () => void                   // Called when closing shop
+
 IMPORTANT OUTPUT RULES:
 1. Do NOT wrap code in markdown code blocks (no \`\`\`typescript or \`\`\`)
 2. Output ONLY raw TypeScript/JavaScript code between the file markers
 3. Use default exports: "export default ComponentName" (not "export const ComponentName")
+4. Props in MenuScreen MUST be named exactly: onStartGame, onOpenShop
 
 Output Format:
 Provide the code in this EXACT structure (NO markdown formatting):
 
+===FILE: app/index.tsx===
+// Main entry point that renders MenuScreen, GameScreen, ShopScreen
+// MUST pass onStartGame (not onStartLevel) to MenuScreen
+===END FILE===
+
 ===FILE: app/screens/MenuScreen.tsx===
-import React from 'react';
-// ... rest of the code with NO markdown code blocks
-export default MenuScreen;
+// MenuScreen with props: { onStartGame, onOpenShop }
+// MUST use onStartGame prop name (not onStartLevel or onPlay)
 ===END FILE===
 
 ===FILE: app/screens/GameScreen.tsx===
-import React from 'react';
-// ... rest of the code with NO markdown code blocks
-export default GameScreen;
+// GameScreen with props: { levelId, onLevelComplete, onGameOver, onExit }
 ===END FILE===
 
 ===FILE: app/screens/ShopScreen.tsx===
-import React from 'react';
-// ... rest of the code with NO markdown code blocks
-export default ShopScreen;
+// ShopScreen with props: { onClose }
 ===END FILE===
 
 ===FILE: app/config/levels.ts===
-// ... level configuration
+// Level configuration
 ===END FILE===
 
 ===FILE: __tests__/game-logic.test.ts===
-// ... tests
+// Tests
 ===END FILE===
 
 Generate complete, production-ready code that works in Expo Go without native builds.`;
