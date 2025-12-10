@@ -19,7 +19,7 @@ loadEnv({ path: envPath });
 
 export function getConfig(): AgentConfig {
   const requiredVars = [
-    'GITHUB_TOKEN',
+    'GIT_TOKEN',
     'GITHUB_ORG',
     'EXPO_TOKEN',
     'ANTHROPIC_API_KEY'
@@ -31,7 +31,7 @@ export function getConfig(): AgentConfig {
   }
 
   return {
-    githubToken: process.env.GITHUB_TOKEN!,
+    githubToken: process.env.GIT_TOKEN!,
     githubOrg: process.env.GITHUB_ORG!,
     expoToken: process.env.EXPO_TOKEN!,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY!,

@@ -417,7 +417,7 @@ cat generated-games/analysis-YYYY-MM-DD.json | jq '.games[] | {id, installs, ret
 curl https://api.anthropic.com/v1/messages -H "x-api-key: $ANTHROPIC_API_KEY"
 
 # Check GitHub API
-curl -H "Authorization: token $GITHUB_TOKEN" https://api.github.com/user
+curl -H "Authorization: token $GIT_TOKEN" https://api.github.com/user
 ```
 
 ### Deployment Fails

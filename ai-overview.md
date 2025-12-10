@@ -208,7 +208,7 @@ Automate the creation, deployment, and management of multiple mobile games to di
 ## Security & Secrets Management
 
 ### Required Secrets
-- `GITHUB_TOKEN` - Personal access token with repo permissions
+- `GIT_TOKEN` - Personal access token with repo permissions
 - `EXPO_TOKEN` - EAS authentication
 - `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` - Play Developer API credentials
 - `ADMOB_APP_ID` - AdMob application ID (per game)

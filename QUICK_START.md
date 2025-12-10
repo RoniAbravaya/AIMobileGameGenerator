@@ -58,7 +58,7 @@ IMAGE_API_KEY=sk-xxxxx
 IMAGE_API_PROVIDER=openai
 
 # Optional: GitHub token for automated repo creation
-GITHUB_TOKEN=ghp_xxxxx
+GIT_TOKEN=ghp_xxxxx
 GITHUB_ORG=your-username
 
 # Optional: Expo token for builds

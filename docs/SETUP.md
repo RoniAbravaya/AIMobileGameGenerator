@@ -108,7 +108,7 @@ IMAGE_API_KEY=sk-xxxxx
 IMAGE_API_BASE_URL=https://api.openai.com/v1/images/generations
 
 # GitHub Configuration
-GITHUB_TOKEN=ghp_xxxxx
+GIT_TOKEN=ghp_xxxxx
 GITHUB_ORG=your-github-username
 
 # Expo/EAS Configuration
