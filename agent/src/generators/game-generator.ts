@@ -93,10 +93,14 @@ export class GameGenerator {
       logger.step(4, 8, 'Generating AI images for splash and icon');
       const assetsDir = path.join(localPath, 'assets', 'generated');
       const imageResult = await this.imageService.generateGameAssets({
-        gameType: type,
-        theme,
-        styleKeywords: mechanics
-      }, assetsDir);
+        name,
+        highConcept: `${theme} ${type} game with ${mechanics.join(', ')} mechanics`,
+        visualTheme: {
+          mood: theme.includes('space') ? 'cosmic' : theme.includes('nature') ? 'peaceful' : 'energetic',
+          style: type === 'puzzle' ? 'minimal' : type === 'arcade' ? 'vibrant' : 'modern',
+          palette: this.getThemePalette(theme)
+        }
+      } as any, assetsDir);
 
       // Step 5: Update configuration files
       logger.step(5, 8, 'Updating configuration');
@@ -379,6 +383,35 @@ export class GameGenerator {
     };
 
     await fs.writeJson(path.join(projectPath, 'eas.json'), easJson, { spaces: 2 });
+  }
+
+  /**
+   * Get color palette based on theme
+   */
+  private getThemePalette(theme: string): string[] {
+    const themeLower = theme.toLowerCase();
+    
+    if (themeLower.includes('space') || themeLower.includes('galaxy')) {
+      return ['#1a1a2e', '#16213e', '#0f3460', '#e94560'];
+    }
+    if (themeLower.includes('nature') || themeLower.includes('forest')) {
+      return ['#2d5a27', '#4a7c4b', '#8bc34a', '#c8e6c9'];
+    }
+    if (themeLower.includes('ocean') || themeLower.includes('water')) {
+      return ['#006994', '#40a4c8', '#87ceeb', '#e0f7fa'];
+    }
+    if (themeLower.includes('fire') || themeLower.includes('lava')) {
+      return ['#ff5722', '#ff9800', '#ffc107', '#ffeb3b'];
+    }
+    if (themeLower.includes('cyber') || themeLower.includes('neon')) {
+      return ['#0d0221', '#ff00ff', '#00ffff', '#ff6600'];
+    }
+    if (themeLower.includes('retro') || themeLower.includes('pixel')) {
+      return ['#3f2832', '#be4a2f', '#ead4aa', '#4b692f'];
+    }
+    
+    // Default palette
+    return ['#1a1a2e', '#16213e', '#0f3460', '#e94560'];
   }
 
   /**
