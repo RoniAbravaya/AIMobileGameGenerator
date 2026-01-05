@@ -123,9 +123,14 @@ class PostLaunchStep(BaseStepExecutor):
         event_counts = {}
         total_scores = []
         session_durations = []
+        unique_users = set()  # Track unique user IDs for DAU
         
         for event in events:
             event_counts[event.event_type] = event_counts.get(event.event_type, 0) + 1
+            
+            # Track unique users for DAU calculation
+            if event.user_id:
+                unique_users.add(event.user_id)
             
             # Collect scores from level_complete events
             if event.event_type == "level_complete" and event.properties:
@@ -158,6 +163,7 @@ class PostLaunchStep(BaseStepExecutor):
         level_3_plus = sum(
             1 for e in events 
             if e.event_type == "level_complete" 
+            and e.properties
             and e.properties.get("level", 0) >= 3
         )
         retention_proxy = level_3_plus / max(game_starts, 1)
@@ -176,6 +182,7 @@ class PostLaunchStep(BaseStepExecutor):
             "retention_proxy": retention_proxy,
             "average_score": average_score,
             "average_session_length": average_session_length,
+            "unique_users": len(unique_users),  # DAU count
             "period_days": 30,
         }
 
@@ -218,7 +225,7 @@ class PostLaunchStep(BaseStepExecutor):
             game_id=game_id,
             date=today,
             sessions=metrics.get("game_starts", 0),
-            dau=len(set(e.get("user_id") for e in metrics.get("event_counts", {}).values() if e)),
+            dau=metrics.get("unique_users", 0),  # Daily active users from unique user IDs
             avg_session_duration_seconds=int(metrics.get("average_session_length", 0)),
             levels_completed=metrics.get("level_completes", 0),
             levels_failed=metrics.get("level_fails", 0),
