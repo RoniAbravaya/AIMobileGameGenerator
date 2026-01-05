@@ -78,7 +78,8 @@ class SimilarityService:
         Returns:
             SimilarityResult with similarity score and details
         """
-        exclude_ids = exclude_game_ids or []
+        # Create a copy to avoid modifying the input list
+        exclude_ids = list(exclude_game_ids) if exclude_game_ids else []
         exclude_ids.append(new_game.id)
 
         # Get all existing games with GDD specs

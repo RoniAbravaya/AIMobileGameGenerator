@@ -5,7 +5,7 @@ Handles event ingestion and metrics aggregation.
 """
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import List, Optional
 
 import structlog
@@ -231,8 +231,8 @@ class AnalyticsService:
         - Level completions/failures
         - Ad metrics
         """
-        start_dt = datetime.combine(target_date, datetime.min.time())
-        end_dt = datetime.combine(target_date, datetime.max.time())
+        start_dt = datetime.combine(target_date, time.min)
+        end_dt = datetime.combine(target_date, time.max)
 
         # Get event counts
         events_result = await self.db.execute(

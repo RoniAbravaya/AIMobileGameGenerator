@@ -4,7 +4,7 @@ Similarity API Endpoints
 View similarity checks and regeneration history.
 """
 
-from typing import List
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -26,8 +26,8 @@ class SimilarityCheckResponse(BaseModel):
     game_id: UUID
     is_similar: bool
     similarity_score: float
-    most_similar_game_id: UUID | None
-    breakdown: dict | None
+    most_similar_game_id: Optional[UUID] = None
+    breakdown: Optional[Dict] = None
     attempt_number: int
     triggered_regeneration: bool
     created_at: str
@@ -41,14 +41,14 @@ class RegenerationLogResponse(BaseModel):
 
     id: UUID
     game_id: UUID
-    batch_id: UUID | None
+    batch_id: Optional[UUID] = None
     attempt_number: int
     reason: str
     similarity_score: float
-    similar_to_game_id: UUID | None
-    constraints_applied: dict | None
+    similar_to_game_id: Optional[UUID] = None
+    constraints_applied: Optional[Dict] = None
     success: bool
-    final_similarity_score: float | None
+    final_similarity_score: Optional[float] = None
     created_at: str
 
     class Config:

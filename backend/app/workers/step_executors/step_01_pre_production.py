@@ -17,8 +17,6 @@ If the generated game is >80% similar to any existing game,
 the step will regenerate with different constraints until unique.
 """
 
-import json
-import random
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -126,6 +124,11 @@ class PreProductionStep(BaseStepExecutor):
         similarity_service = SimilarityService(db)
         mechanic_service = MechanicService(db)
 
+        # Initialize variables to track last successful generation
+        last_gdd_spec = None
+        last_mechanic_names = []
+        last_similarity_result = None
+
         while attempt <= MAX_REGENERATION_ATTEMPTS:
             logs.append(f"\n--- Generation Attempt {attempt} ---")
 
@@ -169,6 +172,11 @@ class PreProductionStep(BaseStepExecutor):
                 # SIMILARITY CHECK
                 logs.append("Performing similarity check...")
                 similarity_result = await similarity_service.check_similarity(game)
+                
+                # Save for potential fallback
+                last_gdd_spec = gdd_spec
+                last_mechanic_names = mechanic_names
+                last_similarity_result = similarity_result
 
                 # Record similarity check
                 similarity_check = SimilarityCheck(
@@ -242,26 +250,44 @@ class PreProductionStep(BaseStepExecutor):
 
         # Exhausted all attempts
         logs.append(f"\n✗ FAILED: Could not generate unique game after {MAX_REGENERATION_ATTEMPTS} attempts")
+
+        # Check if we have any GDD to use
+        if last_gdd_spec is None:
+            logs.append("ERROR: No GDD was successfully generated")
+            return {
+                "success": False,
+                "artifacts": {},
+                "validation": {"valid": False, "errors": ["No GDD generated after all attempts"]},
+                "error": "Failed to generate any valid GDD",
+                "logs": "\n".join(logs),
+            }
+
         logs.append("Proceeding with last generated GDD despite similarity")
 
         # Use the last generated GDD anyway but flag it
-        game.gdd_spec["_similarity_warning"] = True
-        game.gdd_spec["_similarity_score"] = similarity_result.similarity_score
+        last_gdd_spec["_similarity_warning"] = True
+        if last_similarity_result:
+            last_gdd_spec["_similarity_score"] = last_similarity_result.similarity_score
+        
+        game.gdd_spec = last_gdd_spec
+        game.selected_mechanics = last_mechanic_names
         await db.commit()
+
+        similarity_score = last_similarity_result.similarity_score if last_similarity_result else 0.0
 
         return {
             "success": True,  # Allow to proceed but with warning
             "artifacts": {
-                "gdd_spec": game.gdd_spec,
-                "selected_mechanics": game.selected_mechanics,
-                "similarity_score": similarity_result.similarity_score,
+                "gdd_spec": last_gdd_spec,
+                "selected_mechanics": last_mechanic_names,
+                "similarity_score": similarity_score,
                 "generation_attempts": MAX_REGENERATION_ATTEMPTS,
                 "similarity_warning": True,
             },
             "validation": {
                 "valid": True,
                 "warnings": [
-                    f"Game may be similar to existing games (score: {similarity_result.similarity_score:.2%})",
+                    f"Game may be similar to existing games (score: {similarity_score:.2%})",
                     f"Could not achieve uniqueness after {MAX_REGENERATION_ATTEMPTS} attempts",
                 ],
             },

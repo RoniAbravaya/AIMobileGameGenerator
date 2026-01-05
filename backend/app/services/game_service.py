@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.state_machine import STEP_DEFINITIONS, GameStateMachine, StepStatus
+from app.core.state_machine import STEP_DEFINITIONS
 from app.models.game import Game
 from app.models.step import GameStep
 from app.schemas.game import GameCreate

@@ -8,8 +8,6 @@ Creates the GitHub repository and scaffolds the Flutter + Flame project:
 - Validate with flutter analyze
 """
 
-import os
-import subprocess
 from typing import Any, Dict
 
 import structlog
