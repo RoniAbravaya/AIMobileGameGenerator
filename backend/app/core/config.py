@@ -49,10 +49,11 @@ class Settings(BaseSettings):
     github_org: str = "gamefactory-games"
     github_template_repo: str = "flame-game-template"
 
-    # AI Services
-    openai_api_key: Optional[str] = None
-    anthropic_api_key: Optional[str] = None
-    ai_model: str = "gpt-4-turbo-preview"
+    # AI Services - Claude AI Primary
+    anthropic_api_key: Optional[str] = None  # Primary AI provider (Claude)
+    claude_model: str = "claude-3-5-sonnet-20241022"  # Default Claude model
+    openai_api_key: Optional[str] = None  # Fallback AI provider
+    ai_model: str = "gpt-4-turbo-preview"  # Fallback model for OpenAI
 
     # Firebase
     firebase_project_id: Optional[str] = None

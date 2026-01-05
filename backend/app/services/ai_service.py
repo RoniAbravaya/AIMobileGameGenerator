@@ -1,90 +1,108 @@
 """
-AI Service
+AI Service - Claude AI Primary
 
-Provides AI-powered generation capabilities using OpenAI and Anthropic APIs.
-Handles GDD generation, code generation, level configuration, and content creation.
+Provides AI-powered generation capabilities using Anthropic Claude as the primary provider.
+Supports OpenAI as a fallback option.
+
+Handles:
+- GDD generation
+- Code generation  
+- Level configuration
+- Asset prompt generation
+- Code quality analysis
 """
 
 import json
 from typing import Any, Dict, List, Optional
 
 import structlog
-from openai import AsyncOpenAI
 from anthropic import AsyncAnthropic
+from openai import AsyncOpenAI
 
 from app.core.config import settings
 
 logger = structlog.get_logger()
 
 
+# Claude model options
+CLAUDE_MODELS = {
+    "claude-3-opus": "claude-3-opus-20240229",         # Most capable, best for complex tasks
+    "claude-3-5-sonnet": "claude-3-5-sonnet-20241022", # Balanced, recommended default
+    "claude-3-sonnet": "claude-3-sonnet-20240229",     # Previous sonnet
+    "claude-3-haiku": "claude-3-haiku-20240307",       # Fastest, good for simple tasks
+}
+
+
 class AIService:
     """
     Service for AI-powered content generation.
     
-    Supports both OpenAI (GPT-4) and Anthropic (Claude) models.
+    Primary: Anthropic Claude (claude-3-5-sonnet by default)
+    Fallback: OpenAI GPT-4 (if configured)
     """
 
     def __init__(self):
-        self.openai_client: Optional[AsyncOpenAI] = None
         self.anthropic_client: Optional[AsyncAnthropic] = None
+        self.openai_client: Optional[AsyncOpenAI] = None
+        # Use model from settings, or default to claude-3-5-sonnet
+        self.primary_model: str = getattr(settings, 'claude_model', None) or "claude-3-5-sonnet-20241022"
         self._initialize_clients()
 
     def _initialize_clients(self):
-        """Initialize AI clients based on available API keys."""
-        if settings.openai_api_key:
-            self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
-            logger.info("openai_client_initialized")
-        
+        """Initialize AI clients - Claude primary, OpenAI fallback."""
+        # Primary: Anthropic Claude
         if settings.anthropic_api_key:
             self.anthropic_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-            logger.info("anthropic_client_initialized")
+            logger.info("claude_client_initialized", model=self.primary_model)
+        
+        # Fallback: OpenAI
+        if settings.openai_api_key:
+            self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+            logger.info("openai_client_initialized_as_fallback")
 
-        if not self.openai_client and not self.anthropic_client:
-            logger.warning("no_ai_clients_available", 
-                          message="Set OPENAI_API_KEY or ANTHROPIC_API_KEY")
+        if not self.anthropic_client and not self.openai_client:
+            logger.warning(
+                "no_ai_clients_available", 
+                message="Set ANTHROPIC_API_KEY (primary) or OPENAI_API_KEY (fallback)"
+            )
 
-    async def _call_openai(
+    def set_model(self, model_name: str):
+        """
+        Set the Claude model to use.
+        
+        Args:
+            model_name: One of 'claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'
+        """
+        if model_name in CLAUDE_MODELS:
+            self.primary_model = CLAUDE_MODELS[model_name]
+            logger.info("claude_model_changed", model=self.primary_model)
+        else:
+            logger.warning("invalid_model_name", model=model_name, available=list(CLAUDE_MODELS.keys()))
+
+    async def _call_claude(
         self,
         system_prompt: str,
         user_prompt: str,
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        response_format: Optional[Dict] = None,
     ) -> str:
-        """Call OpenAI API."""
-        if not self.openai_client:
-            raise ValueError("OpenAI client not initialized. Set OPENAI_API_KEY.")
-
-        model = model or settings.ai_model
+        """
+        Call Claude API.
         
-        kwargs = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        
-        if response_format:
-            kwargs["response_format"] = response_format
-
-        response = await self.openai_client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content
-
-    async def _call_anthropic(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        model: str = "claude-3-opus-20240229",
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-    ) -> str:
-        """Call Anthropic API."""
+        Args:
+            system_prompt: System instructions for Claude
+            user_prompt: User message/request
+            model: Optional model override
+            temperature: Creativity level (0.0-1.0)
+            max_tokens: Maximum response length
+        """
         if not self.anthropic_client:
-            raise ValueError("Anthropic client not initialized. Set ANTHROPIC_API_KEY.")
+            raise ValueError("Claude client not initialized. Set ANTHROPIC_API_KEY.")
+
+        model = model or self.primary_model
+
+        logger.debug("calling_claude", model=model, max_tokens=max_tokens)
 
         response = await self.anthropic_client.messages.create(
             model=model,
@@ -93,42 +111,68 @@ class AIService:
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )
+        
         return response.content[0].text
+
+    async def _call_openai(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ) -> str:
+        """Call OpenAI API (fallback)."""
+        if not self.openai_client:
+            raise ValueError("OpenAI client not initialized. Set OPENAI_API_KEY.")
+
+        model = model or settings.ai_model or "gpt-4-turbo-preview"
+        
+        response = await self.openai_client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        
+        return response.choices[0].message.content
 
     async def _call_ai(
         self,
         system_prompt: str,
         user_prompt: str,
-        prefer_openai: bool = True,
+        use_fallback_on_error: bool = True,
         **kwargs,
     ) -> str:
         """
-        Call AI with fallback between providers.
+        Call AI with Claude as primary, OpenAI as fallback.
         
         Args:
             system_prompt: System instructions
             user_prompt: User request
-            prefer_openai: If True, try OpenAI first, then Anthropic
-            **kwargs: Additional arguments for the API call
+            use_fallback_on_error: Whether to try OpenAI if Claude fails
+            **kwargs: Additional arguments (temperature, max_tokens, etc.)
         """
-        if prefer_openai and self.openai_client:
+        # Try Claude first (primary)
+        if self.anthropic_client:
             try:
-                return await self._call_openai(system_prompt, user_prompt, **kwargs)
+                return await self._call_claude(system_prompt, user_prompt, **kwargs)
             except Exception as e:
-                logger.warning("openai_call_failed", error=str(e))
-                if self.anthropic_client:
-                    return await self._call_anthropic(system_prompt, user_prompt, **kwargs)
-                raise
-        elif self.anthropic_client:
-            try:
-                return await self._call_anthropic(system_prompt, user_prompt, **kwargs)
-            except Exception as e:
-                logger.warning("anthropic_call_failed", error=str(e))
-                if self.openai_client:
+                logger.warning("claude_call_failed", error=str(e))
+                if use_fallback_on_error and self.openai_client:
+                    logger.info("falling_back_to_openai")
                     return await self._call_openai(system_prompt, user_prompt, **kwargs)
                 raise
-        else:
-            raise ValueError("No AI client available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
+        
+        # Fallback to OpenAI if no Claude
+        if self.openai_client:
+            logger.info("using_openai_no_claude_configured")
+            return await self._call_openai(system_prompt, user_prompt, **kwargs)
+        
+        raise ValueError("No AI client available. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
 
     async def generate_gdd(
         self,
@@ -141,6 +185,8 @@ class AIService:
     ) -> Dict[str, Any]:
         """
         Generate a Game Design Document (GDD-lite) for a mobile game.
+        
+        Uses Claude's structured output capabilities for reliable JSON generation.
         
         Args:
             game_name: Name of the game
@@ -167,19 +213,20 @@ IMPORTANT RULES:
 5. Design for short play sessions (1-3 minutes per level)
 6. Include monetization hooks (rewarded ads for unlocks)
 
-You MUST return a valid JSON object with no additional text or markdown."""
+You MUST return a valid JSON object with no additional text, markdown, or code blocks.
+Start your response directly with { and end with }."""
 
         user_prompt = f"""Create a GDD-lite for the following game:
 
 GAME NAME: {game_name}
 GENRE: {genre}
 SELECTED MECHANICS: {', '.join(mechanics)}
-GENERATION ATTEMPT: {attempt_number} (vary the design if attempt > 1)
+GENERATION ATTEMPT: {attempt_number} (vary the design significantly if attempt > 1)
 
 CONSTRAINTS FROM SYSTEM:
 {json.dumps(constraints, indent=2) if constraints else "None"}
 
-EXCLUDED ART STYLES (use different ones):
+EXCLUDED ART STYLES (must use different ones):
 {', '.join(excluded_styles) if excluded_styles else "None"}
 
 Return a JSON object with EXACTLY this structure:
@@ -247,28 +294,32 @@ Return a JSON object with EXACTLY this structure:
 }}"""
 
         logger.info(
-            "generating_gdd",
+            "generating_gdd_with_claude",
             game_name=game_name,
             genre=genre,
             mechanics=mechanics,
             attempt=attempt_number,
         )
 
+        # Use slightly higher temperature for more creative variation on retries
+        temperature = min(0.9, 0.6 + (attempt_number * 0.1))
+
         response = await self._call_ai(
             system_prompt,
             user_prompt,
-            temperature=0.7 + (attempt_number * 0.05),  # Increase randomness with attempts
+            temperature=temperature,
             max_tokens=4096,
         )
 
         # Parse JSON response
         try:
             # Clean response if it has markdown code blocks
+            response = response.strip()
             if response.startswith("```"):
                 response = response.split("```")[1]
                 if response.startswith("json"):
                     response = response[4:]
-            response = response.strip()
+                response = response.strip()
             
             gdd = json.loads(response)
             logger.info("gdd_generated_successfully", game_name=game_name)
@@ -287,6 +338,8 @@ Return a JSON object with EXACTLY this structure:
         """
         Generate Dart/Flutter code for a specific file.
         
+        Claude excels at code generation with proper structure and documentation.
+        
         Args:
             file_purpose: What the file should do (e.g., "main game class", "player component")
             game_context: GDD and other game information
@@ -301,11 +354,12 @@ Generate clean, well-documented Dart code following best practices.
 
 RULES:
 1. Use Flame 1.x API conventions
-2. Include proper imports
-3. Add documentation comments for classes and public methods
-4. Handle errors gracefully
+2. Include all necessary imports at the top
+3. Add documentation comments (///) for classes and public methods
+4. Handle errors gracefully with try-catch where appropriate
 5. Follow Dart style guide (snake_case for files, PascalCase for classes)
-6. Return ONLY the code, no markdown or explanations"""
+6. Return ONLY the Dart code, no markdown formatting or explanations
+7. Start directly with import statements or the main code"""
 
         user_prompt = f"""Generate Dart code for: {file_purpose}
 
@@ -316,16 +370,17 @@ GAME CONTEXT:
 
 {f"ADDITIONAL INSTRUCTIONS:{chr(10)}{additional_instructions}" if additional_instructions else ""}
 
-Return only valid Dart code with no markdown formatting."""
+Return only valid Dart code. Start with imports, no markdown."""
 
         response = await self._call_ai(
             system_prompt,
             user_prompt,
-            temperature=0.3,  # Lower temperature for code
+            temperature=0.3,  # Lower temperature for more consistent code
             max_tokens=8192,
         )
 
-        # Clean response
+        # Clean response of any markdown
+        response = response.strip()
         if response.startswith("```"):
             lines = response.split("\n")
             code_lines = []
@@ -355,10 +410,11 @@ Return only valid Dart code with no markdown formatting."""
         Returns:
             List of level configuration dictionaries
         """
-        system_prompt = """You are a game level designer. Create balanced level configurations
-that provide a smooth difficulty curve for mobile casual games.
+        system_prompt = """You are a game level designer specializing in mobile casual games.
+Create balanced level configurations with a smooth difficulty curve.
 
-Return a JSON array of level configurations with no additional text."""
+Return ONLY a JSON array of level configurations.
+Start directly with [ and end with ]. No markdown or explanations."""
 
         user_prompt = f"""Generate {level_count} level configurations for this game:
 
@@ -382,7 +438,9 @@ Generate a JSON array with {level_count} levels. Each level should have:
     "special_features": ["list of level-specific features"],
     "background_theme": "theme name",
     "music_track": "track identifier"
-}}"""
+}}
+
+Return only the JSON array, starting with ["""
 
         response = await self._call_ai(
             system_prompt,
@@ -393,11 +451,12 @@ Generate a JSON array with {level_count} levels. Each level should have:
 
         # Parse JSON
         try:
+            response = response.strip()
             if response.startswith("```"):
                 response = response.split("```")[1]
                 if response.startswith("json"):
                     response = response[4:]
-            response = response.strip()
+                response = response.strip()
             
             levels = json.loads(response)
             return levels
@@ -412,7 +471,7 @@ Generate a JSON array with {level_count} levels. Each level should have:
         specific_requirements: Optional[str] = None,
     ) -> str:
         """
-        Generate an optimized prompt for AI image generation.
+        Generate an optimized prompt for AI image generation (DALL-E).
         
         Args:
             asset_type: Type of asset (sprite, background, ui, etc.)
@@ -420,19 +479,19 @@ Generate a JSON array with {level_count} levels. Each level should have:
             specific_requirements: Specific details for this asset
         
         Returns:
-            Optimized prompt for DALL-E or similar
+            Optimized prompt for image generation
         """
         style_guide = game_context.get("asset_style_guide", {})
         
-        system_prompt = """You are an expert at writing prompts for AI image generation (DALL-E, Midjourney).
+        system_prompt = """You are an expert at writing prompts for AI image generation.
 Create concise, effective prompts that produce consistent game assets.
 
 RULES:
 1. Be specific about style, colors, and composition
-2. Include "game asset", "transparent background" for sprites
+2. Include "game asset" and "transparent background" for sprites
 3. Mention the art style consistently
-4. Keep prompts under 200 words
-5. Return ONLY the prompt text, no explanations"""
+4. Keep prompts under 150 words
+5. Return ONLY the prompt text, nothing else"""
 
         user_prompt = f"""Create an image generation prompt for:
 
@@ -443,13 +502,13 @@ GAME GENRE: {game_context.get('genre', 'casual')}
 
 {f"SPECIFIC REQUIREMENTS: {specific_requirements}" if specific_requirements else ""}
 
-Return only the image generation prompt."""
+Return only the image generation prompt, no explanations."""
 
         response = await self._call_ai(
             system_prompt,
             user_prompt,
             temperature=0.6,
-            max_tokens=500,
+            max_tokens=300,
         )
 
         return response.strip()
@@ -472,15 +531,13 @@ Return only the image generation prompt."""
         system_prompt = f"""You are a senior {language} developer and code reviewer.
 Analyze the provided code and return a JSON assessment.
 
-Return ONLY a JSON object, no additional text."""
+Return ONLY a JSON object, starting with {{ and ending with }}."""
 
         user_prompt = f"""Analyze this {language} code:
 
-```{language}
 {code}
-```
 
-Return a JSON object:
+Return a JSON object with this structure:
 {{
     "quality_score": 0-100,
     "issues": [
@@ -499,11 +556,13 @@ Return a JSON object:
         )
 
         try:
+            response = response.strip()
             if response.startswith("```"):
                 response = response.split("```")[1]
                 if response.startswith("json"):
                     response = response[4:]
-            return json.loads(response.strip())
+                response = response.strip()
+            return json.loads(response)
         except json.JSONDecodeError:
             return {
                 "quality_score": 70,
@@ -511,6 +570,32 @@ Return a JSON object:
                 "suggestions": ["Could not parse AI response"],
                 "complexity": "unknown",
             }
+
+    async def chat(
+        self,
+        message: str,
+        context: Optional[str] = None,
+        temperature: float = 0.7,
+    ) -> str:
+        """
+        General chat completion with Claude.
+        
+        Args:
+            message: User message
+            context: Optional context/system prompt
+            temperature: Creativity level
+        
+        Returns:
+            Claude's response
+        """
+        system = context or "You are a helpful AI assistant for game development."
+        
+        return await self._call_ai(
+            system,
+            message,
+            temperature=temperature,
+            max_tokens=4096,
+        )
 
 
 # Singleton instance

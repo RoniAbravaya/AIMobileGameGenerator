@@ -134,13 +134,15 @@ See `docs/SIMILARITY_CHECK.md` for complete documentation.
 - Aggregate daily metrics
 - Calculate game scores for ranking
 
-### AIService (`backend/app/services/ai_service.py`) ✅ NEW
-- OpenAI and Anthropic API integration
+### AIService (`backend/app/services/ai_service.py`) ✅ Claude AI Primary
+- **Primary Provider**: Anthropic Claude (claude-3-5-sonnet by default)
+- **Fallback Provider**: OpenAI GPT-4 (if configured)
 - GDD generation with structured JSON output
 - Dart/Flutter code generation
 - Level configuration generation
 - Asset prompt generation for DALL-E
 - Automatic fallback between providers
+- Configurable Claude model (opus/sonnet/haiku)
 
 ### GitHubService (`backend/app/services/github_service.py`) ✅ NEW
 - Full repository creation via GitHub API
@@ -266,9 +268,12 @@ docker-compose exec backend python -m app.db.seed
 ## Required Environment Variables
 
 ```bash
-# AI Services (at least one required)
-OPENAI_API_KEY=sk-...        # For GDD/code generation and DALL-E
-ANTHROPIC_API_KEY=sk-ant-... # Alternative AI provider
+# AI Services - Claude AI is PRIMARY
+ANTHROPIC_API_KEY=sk-ant-... # Primary AI provider (required)
+CLAUDE_MODEL=claude-3-5-sonnet-20241022  # Optional: claude-3-opus, claude-3-haiku
+
+# OpenAI - Optional fallback and DALL-E image generation
+OPENAI_API_KEY=sk-...        # For DALL-E asset generation and fallback
 
 # GitHub (required for repo creation)
 GITHUB_TOKEN=ghp_...         # Personal Access Token with repo scope
