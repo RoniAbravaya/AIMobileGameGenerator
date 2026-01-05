@@ -73,7 +73,7 @@ GameFactory is an automated Flutter + Flame mobile game generation engine that c
 
 Each step is implemented as a **state machine** with validation:
 
-1. **Pre-Production** - Generate GDD-lite (genre, mechanics, analytics plan)
+1. **Pre-Production** - Generate GDD-lite (genre, mechanics, analytics plan) + **SIMILARITY CHECK**
 2. **Project Setup** - Clone Flame template, create GitHub repo
 3. **Architecture** - Enforce standard layers, domain tests
 4. **Analytics Design** - Generate event specification
@@ -85,6 +85,22 @@ Each step is implemented as a **state machine** with validation:
 10. **Testing** - Unit, integration, QA
 11. **Release Prep** - Optimization, signing
 12. **Post-Launch** - Analytics aggregation, learning loop
+
+### Similarity Check (Step 1 Enhancement)
+
+After GDD generation, each game is checked for similarity against all existing games:
+
+- **Threshold**: 80% - games above this trigger automatic regeneration
+- **Max Attempts**: 5 regeneration attempts before accepting with warning
+- **Factors Compared**: Genre (20%), Mechanics (25%), Core Loop (15%), Visual Style (15%), Difficulty (10%), Economy (10%), Name (5%)
+- **Result**: Ensures diversity across all generated games
+
+If too similar, the system regenerates with:
+- Different mechanics selection
+- Different art style
+- Varied session length and economy settings
+
+See `docs/SIMILARITY_CHECK.md` for complete documentation.
 
 ### State Machine Flow
 

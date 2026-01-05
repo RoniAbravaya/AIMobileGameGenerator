@@ -8,6 +8,7 @@ from app.models.game import Game
 from app.models.learning import LearningWeight
 from app.models.log import GenerationLog
 from app.models.mechanic import Mechanic
+from app.models.similarity import RegenerationLog, SimilarityCheck
 from app.models.step import GameStep
 
 __all__ = [
@@ -21,4 +22,6 @@ __all__ = [
     "GameMetrics",
     "LearningWeight",
     "GenerationLog",
+    "SimilarityCheck",
+    "RegenerationLog",
 ]
