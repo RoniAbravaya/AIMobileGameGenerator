@@ -2,12 +2,13 @@
 Learning Weight Model
 
 Weights for mechanic selection based on past performance.
+Supports both mechanic_id reference and mechanic_name string for flexibility.
 """
 
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     DateTime,
@@ -28,19 +29,28 @@ if TYPE_CHECKING:
 
 
 class LearningWeight(Base):
-    """Weight for mechanic selection based on past performance."""
+    """Weight for mechanic selection based on past performance.
+    
+    Can be keyed by either mechanic_id (FK to mechanics table) or 
+    mechanic_name (string, for genre weights like 'genre:runner').
+    """
 
     __tablename__ = "learning_weights"
     __table_args__ = (
-        UniqueConstraint("mechanic_id", "genre", name="unique_mechanic_genre"),
+        UniqueConstraint("mechanic_name", "genre", name="unique_mechanic_name_genre"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    mechanic_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("mechanics.id", ondelete="CASCADE"), nullable=False
+    
+    # Optional FK - for weights tied to specific mechanics in the library
+    mechanic_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("mechanics.id", ondelete="CASCADE"), nullable=True
     )
+    
+    # String name - for weights by name (including genre weights like "genre:runner")
+    mechanic_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
 
     genre: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     weight: Mapped[Decimal] = mapped_column(Numeric(5, 4), nullable=False, default=1.0)
@@ -55,7 +65,7 @@ class LearningWeight(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<LearningWeight {self.genre}: {self.weight}>"
+        return f"<LearningWeight {self.mechanic_name} ({self.genre}): {self.weight}>"
 
     @property
     def has_sufficient_data(self) -> bool:
