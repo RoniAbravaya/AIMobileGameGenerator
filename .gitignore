@@ -1,58 +1,102 @@
-# Environment variables
-.env
-.env.local
-.env.*.local
+# GameFactory .gitignore
 
-# Secrets
-secrets/
-*.json.key
-google-play-key.json
-
-# Node modules
-node_modules/
-*/node_modules/
-
-# Build outputs
-dist/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
 build/
-*.tgz
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+ENV/
+env/
+.env
 
-# Expo
-.expo/
-.expo-shared/
-web-build/
-
-# Native
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.keystore
-*.mobileprovision
-
-# macOS
-.DS_Store
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Logs
-logs/
-*.log
+# Node.js
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.pnpm-debug.log*
+.next/
+out/
 
-# Generated games (optional - comment out if you want to commit them)
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Docker
+.docker/
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+firebase-credentials.json
+
+# Generated
+storage/
 generated-games/
-
-# Test coverage
-coverage/
-
-# Temporary files
 tmp/
-temp/
+
+# Build artifacts
+*.apk
+*.aab
+*.ipa
+
+# Flutter (in game_templates)
+game_templates/**/build/
+game_templates/**/.dart_tool/
+game_templates/**/.packages
+game_templates/**/.pub/
+game_templates/**/.flutter-plugins
+game_templates/**/.flutter-plugins-dependencies
+
+# Alembic
+alembic/versions/*.pyc
+
+# Misc
+*.bak
+*.tmp
+*.temp
+.cache/
