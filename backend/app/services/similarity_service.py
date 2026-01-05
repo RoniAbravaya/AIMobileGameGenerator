@@ -276,14 +276,27 @@ class SimilarityService:
         checks += 1
 
         # Color palette similarity
-        palette_a = style_a.get("color_palette", {})
-        palette_b = style_b.get("color_palette", {})
+        palette_a = style_a.get("color_palette", [])
+        palette_b = style_b.get("color_palette", [])
         if palette_a and palette_b:
-            matching_colors = sum(
-                1 for key in palette_a
-                if palette_a.get(key) == palette_b.get(key)
-            )
-            total_colors = max(len(palette_a), len(palette_b), 1)
+            # Handle both list and dict formats for color_palette
+            if isinstance(palette_a, list) and isinstance(palette_b, list):
+                # List format: compare as sets
+                set_a = set(palette_a)
+                set_b = set(palette_b)
+                matching_colors = len(set_a & set_b)
+                total_colors = max(len(set_a | set_b), 1)
+            elif isinstance(palette_a, dict) and isinstance(palette_b, dict):
+                # Dict format: compare key-value pairs
+                matching_colors = sum(
+                    1 for key in palette_a
+                    if palette_a.get(key) == palette_b.get(key)
+                )
+                total_colors = max(len(palette_a), len(palette_b), 1)
+            else:
+                # Mixed formats - can't compare properly
+                matching_colors = 0
+                total_colors = 1
             score += matching_colors / total_colors
             checks += 1
 

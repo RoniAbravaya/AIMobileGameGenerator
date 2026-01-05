@@ -18,7 +18,8 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import structlog
-from github import Github, GithubException
+import github
+from github import Github, GithubException, InputGitTreeElement
 from github.Repository import Repository
 
 from app.core.config import settings
@@ -406,12 +407,14 @@ class GitHubService:
             tree_elements = []
             for path, content in files.items():
                 blob = repo.create_git_blob(content, "utf-8")
-                tree_elements.append({
-                    "path": path,
-                    "mode": "100644",
-                    "type": "blob",
-                    "sha": blob.sha,
-                })
+                tree_elements.append(
+                    InputGitTreeElement(
+                        path=path,
+                        mode="100644",
+                        type="blob",
+                        sha=blob.sha,
+                    )
+                )
 
             # Create new tree
             new_tree = repo.create_git_tree(tree_elements, base_tree)

@@ -42,7 +42,7 @@ class GameAsset(Base):
     height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     format: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
-    metadata: Mapped[dict] = mapped_column(JSON, nullable=True, default=dict)
+    asset_metadata: Mapped[dict] = mapped_column(JSON, nullable=True, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

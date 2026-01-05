@@ -65,7 +65,6 @@ class BatchService:
             self.db.add(game)
 
         await self.db.commit()
-        await self.db.refresh(batch)
 
         logger.info(
             "batch_created",
@@ -74,7 +73,8 @@ class BatchService:
             game_count=batch.game_count,
         )
 
-        return batch
+        # Re-fetch with games loaded to avoid lazy loading issues
+        return await self.get_batch(batch.id)
 
     async def get_batch(self, batch_id: uuid.UUID) -> Optional[Batch]:
         """Get batch with all games."""
@@ -92,7 +92,13 @@ class BatchService:
         status: Optional[str] = None,
     ) -> List[Batch]:
         """List batches with optional filtering."""
-        query = select(Batch).offset(skip).limit(limit).order_by(Batch.created_at.desc())
+        query = (
+            select(Batch)
+            .options(selectinload(Batch.games))
+            .offset(skip)
+            .limit(limit)
+            .order_by(Batch.created_at.desc())
+        )
 
         if status:
             query = query.where(Batch.status == status)

@@ -40,7 +40,7 @@ class GenerationLog(Base):
     log_level: Mapped[str] = mapped_column(String(20), nullable=False, default="info")
     log_type: Mapped[str] = mapped_column(String(100), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSON, nullable=True, default=dict)
+    log_metadata: Mapped[dict] = mapped_column(JSON, nullable=True, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True

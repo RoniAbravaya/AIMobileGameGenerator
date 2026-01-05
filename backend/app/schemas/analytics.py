@@ -72,19 +72,6 @@ class GameMetricsResponse(BaseModel):
         from_attributes = True
 
 
-class MetricsSummary(BaseModel):
-    """Summary metrics across all games."""
-
-    total_games: int
-    total_installs: int
-    total_dau: int
-    avg_retention_d1: float
-    avg_retention_d7: float
-    total_ad_revenue_cents: int
-    total_iap_revenue_cents: int
-    top_games: List["GameMetricsSummary"]
-
-
 class GameMetricsSummary(BaseModel):
     """Brief metrics summary for a game."""
 
@@ -97,3 +84,16 @@ class GameMetricsSummary(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MetricsSummary(BaseModel):
+    """Summary metrics across all games."""
+
+    total_games: int
+    total_installs: int
+    total_dau: int
+    avg_retention_d1: float
+    avg_retention_d7: float
+    total_ad_revenue_cents: int
+    total_iap_revenue_cents: int
+    top_games: List[GameMetricsSummary]

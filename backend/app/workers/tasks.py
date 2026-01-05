@@ -10,7 +10,10 @@ from datetime import date, timedelta
 from typing import Optional
 
 import structlog
+from celery.exceptions import Retry
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.config import settings
 from app.workers.celery_app import celery_app
 
 logger = structlog.get_logger()
@@ -26,6 +29,35 @@ def run_async(coro):
         loop.close()
 
 
+def get_task_session():
+    """
+    Create a fresh database session for a Celery task.
+    
+    Each task gets its own engine to avoid connection conflicts
+    when multiple tasks run concurrently.
+    """
+    from app.db.session import Base
+    
+    engine = create_async_engine(
+        str(settings.database_url),
+        pool_size=2,
+        max_overflow=3,
+        echo=False,
+        future=True,
+        pool_pre_ping=True,
+    )
+    
+    session_factory = async_sessionmaker(
+        engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+    
+    return session_factory, engine
+
+
 @celery_app.task(bind=True, max_retries=3)
 def process_batch(self, batch_id: str):
     """
@@ -36,39 +68,49 @@ def process_batch(self, batch_id: str):
     logger.info("batch_processing_started", batch_id=batch_id)
 
     async def _process():
-        from app.db.session import async_session
         from app.services.batch_service import BatchService
         from app.services.game_service import GameService
 
-        async with async_session() as db:
-            batch_service = BatchService(db)
-            game_service = GameService(db)
+        session_factory, engine = get_task_session()
+        
+        try:
+            async with session_factory() as db:
+                batch_service = BatchService(db)
+                game_service = GameService(db)
 
-            # Convert string to UUID
-            batch_uuid = uuid_module.UUID(batch_id)
-            batch = await batch_service.get_batch(batch_uuid)
-            if not batch:
-                logger.error("batch_not_found", batch_id=batch_id)
-                return
+                # Convert string to UUID
+                batch_uuid = uuid_module.UUID(batch_id)
+                batch = await batch_service.get_batch(batch_uuid)
+                if not batch:
+                    logger.error("batch_not_found", batch_id=batch_id)
+                    return
 
-            # Process each game
-            for game in batch.games:
-                if game.status == "cancelled":
-                    continue
+                # Process each game
+                game_ids = []
+                for game in batch.games:
+                    if game.status == "cancelled":
+                        continue
 
-                # Initialize steps if not done
-                steps = await game_service.get_game_steps(game.id)
-                if not steps:
-                    await game_service._initialize_steps(game.id)
+                    # Initialize steps if not done
+                    steps = await game_service.get_game_steps(game.id)
+                    if not steps:
+                        await game_service._initialize_steps(game.id)
+                    
+                    game_ids.append(str(game.id))
 
-                # Start with step 1
-                execute_step.delay(str(game.id), 1)
+                await db.commit()
+
+            # Queue step execution AFTER closing the session
+            for game_id in game_ids:
+                execute_step.delay(game_id, 1)
 
             logger.info(
                 "batch_games_queued",
                 batch_id=batch_id,
-                game_count=len(batch.games),
+                game_count=len(game_ids),
             )
+        finally:
+            await engine.dispose()
 
     run_async(_process())
 
@@ -88,113 +130,122 @@ def execute_step(self, game_id: str, step_number: int):
     )
 
     async def _execute():
-        from app.db.session import async_session
         from app.services.game_service import GameService
         from app.workers.step_executors import get_step_executor
 
-        async with async_session() as db:
-            game_service = GameService(db)
-            
-            # Convert string to UUID
-            game_uuid = uuid_module.UUID(game_id)
-            game = await game_service.get_game(game_uuid)
+        session_factory, engine = get_task_session()
+        trigger_next_step = False
+        
+        try:
+            async with session_factory() as db:
+                try:
+                    game_service = GameService(db)
+                    
+                    # Convert string to UUID
+                    game_uuid = uuid_module.UUID(game_id)
+                    game = await game_service.get_game(game_uuid)
 
-            if not game:
-                logger.error("game_not_found", game_id=game_id)
-                return
+                    if not game:
+                        logger.error("game_not_found", game_id=game_id)
+                        return
 
-            if game.status == "cancelled":
-                logger.info("game_cancelled_skipping", game_id=game_id)
-                return
+                    if game.status == "cancelled":
+                        logger.info("game_cancelled_skipping", game_id=game_id)
+                        return
 
-            # Get step and mark as running
-            step = await game_service.get_step(game_uuid, step_number)
-            if not step:
-                logger.error(
-                    "step_not_found",
-                    game_id=game_id,
-                    step_number=step_number,
-                )
-                return
+                    # Get step and mark as running
+                    step = await game_service.get_step(game_uuid, step_number)
+                    if not step:
+                        logger.error(
+                            "step_not_found",
+                            game_id=game_id,
+                            step_number=step_number,
+                        )
+                        return
 
-            await game_service.update_step_status(
-                game_uuid,
-                step_number,
-                status="running",
-            )
-
-            # Get and execute the step
-            executor = get_step_executor(step_number)
-            if not executor:
-                await game_service.update_step_status(
-                    game_uuid,
-                    step_number,
-                    status="failed",
-                    error_message=f"No executor for step {step_number}",
-                )
-                return
-
-            try:
-                result = await executor.execute(db, game)
-
-                if result["success"]:
                     await game_service.update_step_status(
                         game_uuid,
                         step_number,
-                        status="completed",
-                        artifacts=result.get("artifacts", {}),
-                        validation_results=result.get("validation", {}),
-                        logs=result.get("logs"),
+                        status="running",
                     )
 
-                    # Trigger next step if not at end
-                    if step_number < 12:
-                        execute_step.delay(game_id, step_number + 1)
-                    else:
-                        logger.info(
-                            "game_generation_complete",
-                            game_id=game_id,
-                        )
-                else:
-                    step = await game_service.get_step(game_uuid, step_number)
-                    if step and step.can_retry:
-                        # Retry
-                        await game_service.update_step_status(
-                            game_uuid,
-                            step_number,
-                            status="pending",
-                            error_message=result.get("error"),
-                        )
-                        raise self.retry(countdown=60)
-                    else:
+                    # Get and execute the step
+                    executor = get_step_executor(step_number)
+                    if not executor:
                         await game_service.update_step_status(
                             game_uuid,
                             step_number,
                             status="failed",
-                            error_message=result.get("error"),
+                            error_message=f"No executor for step {step_number}",
+                        )
+                        return
+
+                    result = await executor.execute(db, game)
+
+                    if result["success"]:
+                        await game_service.update_step_status(
+                            game_uuid,
+                            step_number,
+                            status="completed",
+                            artifacts=result.get("artifacts", {}),
+                            validation_results=result.get("validation", {}),
                             logs=result.get("logs"),
                         )
 
-            except Exception as e:
-                logger.exception(
-                    "step_execution_error",
-                    game_id=game_id,
-                    step_number=step_number,
-                    error=str(e),
-                )
+                        # Flag to trigger next step after session closes
+                        if step_number < 12:
+                            trigger_next_step = True
+                        else:
+                            logger.info(
+                                "game_generation_complete",
+                                game_id=game_id,
+                            )
+                    else:
+                        error_msg = result.get("error", "Unknown error")
+                        await game_service.update_step_status(
+                            game_uuid,
+                            step_number,
+                            status="failed",
+                            error_message=error_msg,
+                            logs=result.get("logs"),
+                        )
+                        logger.warning(
+                            "step_execution_failed",
+                            game_id=game_id,
+                            step_number=step_number,
+                            error=error_msg,
+                        )
 
-                step = await game_service.get_step(game_uuid, step_number)
-                if step and step.retry_count < step.max_retries:
-                    step.retry_count += 1
                     await db.commit()
-                    raise self.retry(exc=e, countdown=60)
-                else:
-                    await game_service.update_step_status(
-                        game_uuid,
-                        step_number,
-                        status="failed",
-                        error_message=str(e),
+
+                except Exception as e:
+                    await db.rollback()
+                    logger.exception(
+                        "step_execution_error",
+                        game_id=game_id,
+                        step_number=step_number,
+                        error=str(e),
                     )
+                    
+                    # Try to mark step as failed in a new transaction
+                    try:
+                        game_service = GameService(db)
+                        await game_service.update_step_status(
+                            uuid_module.UUID(game_id),
+                            step_number,
+                            status="failed",
+                            error_message=str(e),
+                        )
+                        await db.commit()
+                    except Exception:
+                        logger.error("failed_to_update_step_status", game_id=game_id)
+
+        finally:
+            await engine.dispose()
+        
+        # Trigger next step AFTER closing session and disposing engine
+        if trigger_next_step:
+            execute_step.delay(game_id, step_number + 1)
 
     run_async(_execute())
 
@@ -209,28 +260,32 @@ def generate_assets(game_id: str, asset_type: str, spec: dict):
     )
 
     async def _generate():
-        from app.db.session import async_session
         from app.services.asset_service import get_asset_service
         from app.services.game_service import GameService
 
-        async with async_session() as db:
-            game_service = GameService(db)
-            game_uuid = uuid_module.UUID(game_id)
-            game = await game_service.get_game(game_uuid)
-            
-            if not game or not game.gdd_spec:
-                return {"success": False, "error": "Game or GDD not found"}
-            
-            asset_service = get_asset_service()
-            result = await asset_service.generate_asset(
-                game_id=game_id,
-                asset_type=asset_type,
-                asset_name=spec.get("name", asset_type),
-                description=spec.get("description", ""),
-                style_guide=game.gdd_spec.get("asset_style_guide", {}),
-                output_path=asset_service.storage_path / game_id,
-            )
-            return result
+        session_factory, engine = get_task_session()
+        
+        try:
+            async with session_factory() as db:
+                game_service = GameService(db)
+                game_uuid = uuid_module.UUID(game_id)
+                game = await game_service.get_game(game_uuid)
+                
+                if not game or not game.gdd_spec:
+                    return {"success": False, "error": "Game or GDD not found"}
+                
+                asset_service = get_asset_service()
+                result = await asset_service.generate_asset(
+                    game_id=game_id,
+                    asset_type=asset_type,
+                    asset_name=spec.get("name", asset_type),
+                    description=spec.get("description", ""),
+                    style_guide=game.gdd_spec.get("asset_style_guide", {}),
+                    output_path=asset_service.storage_path / game_id,
+                )
+                return result
+        finally:
+            await engine.dispose()
 
     return run_async(_generate())
 
@@ -246,38 +301,42 @@ def aggregate_daily_metrics(target_date: Optional[str] = None):
     logger.info("metrics_aggregation_started", date=str(_date))
 
     async def _aggregate():
-        from app.db.session import async_session
         from app.services.analytics_service import AnalyticsService
         from app.services.game_service import GameService
 
-        async with async_session() as db:
-            game_service = GameService(db)
-            analytics_service = AnalyticsService(db)
+        session_factory, engine = get_task_session()
+        
+        try:
+            async with session_factory() as db:
+                game_service = GameService(db)
+                analytics_service = AnalyticsService(db)
 
-            # Get all active games
-            games = await game_service.list_games(
-                limit=1000,
-                status="completed",
-            )
+                # Get all active games
+                games = await game_service.list_games(
+                    limit=1000,
+                    status="completed",
+                )
 
-            for game in games:
-                try:
-                    await analytics_service.aggregate_metrics_for_date(
-                        game.id,
-                        _date,
-                    )
-                except Exception as e:
-                    logger.error(
-                        "metrics_aggregation_error",
-                        game_id=str(game.id),
-                        error=str(e),
-                    )
+                for game in games:
+                    try:
+                        await analytics_service.aggregate_metrics_for_date(
+                            game.id,
+                            _date,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "metrics_aggregation_error",
+                            game_id=str(game.id),
+                            error=str(e),
+                        )
 
-            logger.info(
-                "metrics_aggregation_completed",
-                date=str(_date),
-                game_count=len(games),
-            )
+                logger.info(
+                    "metrics_aggregation_completed",
+                    date=str(_date),
+                    game_count=len(games),
+                )
+        finally:
+            await engine.dispose()
 
     run_async(_aggregate())
 
@@ -292,59 +351,63 @@ def build_game(game_id: str, build_type: str = "debug"):
     )
 
     async def _build():
-        from app.db.session import async_session
         from app.services.game_service import GameService
         from app.services.github_service import get_github_service
         from app.models.build import GameBuild
 
-        async with async_session() as db:
-            game_service = GameService(db)
-            github_service = get_github_service()
-            
-            # Convert string to UUID
-            game_uuid = uuid_module.UUID(game_id)
-            game = await game_service.get_game(game_uuid)
+        session_factory, engine = get_task_session()
+        
+        try:
+            async with session_factory() as db:
+                game_service = GameService(db)
+                github_service = get_github_service()
+                
+                # Convert string to UUID
+                game_uuid = uuid_module.UUID(game_id)
+                game = await game_service.get_game(game_uuid)
 
-            if not game or not game.github_repo:
-                logger.error(
-                    "build_failed_no_repo",
-                    game_id=game_id,
+                if not game or not game.github_repo:
+                    logger.error(
+                        "build_failed_no_repo",
+                        game_id=game_id,
+                    )
+                    return {"success": False, "error": "No game or repo found"}
+
+                # Trigger GitHub Actions workflow
+                workflow_result = await github_service.trigger_workflow(
+                    repo_name=game.github_repo,
+                    workflow_id="build.yml",
+                    ref="main",
+                    inputs={"build_type": build_type},
                 )
-                return {"success": False, "error": "No game or repo found"}
 
-            # Trigger GitHub Actions workflow
-            workflow_result = await github_service.trigger_workflow(
-                repo_name=game.github_repo,
-                workflow_id="build.yml",
-                ref="main",
-                inputs={"build_type": build_type},
-            )
+                # Create build record
+                build = GameBuild(
+                    game_id=game.id,
+                    build_type=build_type,
+                    status="pending" if workflow_result["success"] else "failed",
+                    github_workflow_run_id=workflow_result.get("run_id"),
+                    github_workflow_url=workflow_result.get("url"),
+                )
+                db.add(build)
+                await db.commit()
 
-            # Create build record
-            build = GameBuild(
-                game_id=game.id,
-                build_type=build_type,
-                status="pending" if workflow_result["success"] else "failed",
-                github_workflow_run_id=workflow_result.get("run_id"),
-                github_workflow_url=workflow_result.get("url"),
-            )
-            db.add(build)
-            await db.commit()
-
-            logger.info(
-                "build_triggered",
-                game_id=game_id,
-                repo=game.github_repo,
-                build_type=build_type,
-                success=workflow_result["success"],
-            )
-            
-            return {
-                "success": workflow_result["success"],
-                "build_id": str(build.id),
-                "repo": game.github_repo,
-                "build_type": build_type,
-                "workflow_triggered": workflow_result["success"],
-            }
+                logger.info(
+                    "build_triggered",
+                    game_id=game_id,
+                    repo=game.github_repo,
+                    build_type=build_type,
+                    success=workflow_result["success"],
+                )
+                
+                return {
+                    "success": workflow_result["success"],
+                    "build_id": str(build.id),
+                    "repo": game.github_repo,
+                    "build_type": build_type,
+                    "workflow_triggered": workflow_result["success"],
+                }
+        finally:
+            await engine.dispose()
 
     return run_async(_build())

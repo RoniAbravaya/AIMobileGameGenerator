@@ -26,10 +26,11 @@ logger = structlog.get_logger()
 
 # Claude model options
 CLAUDE_MODELS = {
-    "claude-3-opus": "claude-3-opus-20240229",         # Most capable, best for complex tasks
-    "claude-3-5-sonnet": "claude-3-5-sonnet-20241022", # Balanced, recommended default
-    "claude-3-sonnet": "claude-3-sonnet-20240229",     # Previous sonnet
-    "claude-3-haiku": "claude-3-haiku-20240307",       # Fastest, good for simple tasks
+    "claude-3-opus": "claude-3-opus-20240229",          # Most capable, best for complex tasks
+    "claude-3-5-sonnet": "claude-3-5-sonnet-latest",    # Balanced, recommended default
+    "claude-sonnet-4": "claude-sonnet-4-20250514",      # Latest Sonnet 4
+    "claude-3-sonnet": "claude-3-sonnet-20240229",      # Previous sonnet
+    "claude-3-haiku": "claude-3-haiku-20240307",        # Fastest, good for simple tasks
 }
 
 
@@ -44,8 +45,8 @@ class AIService:
     def __init__(self):
         self.anthropic_client: Optional[AsyncAnthropic] = None
         self.openai_client: Optional[AsyncOpenAI] = None
-        # Use model from settings, or default to claude-3-5-sonnet
-        self.primary_model: str = getattr(settings, 'claude_model', None) or "claude-3-5-sonnet-20241022"
+        # Use model from settings, or default to claude-3-5-sonnet-latest
+        self.primary_model: str = getattr(settings, 'claude_model', None) or "claude-3-5-sonnet-latest"
         self._initialize_clients()
 
     def _initialize_clients(self):
@@ -101,12 +102,16 @@ class AIService:
             raise ValueError("Claude client not initialized. Set ANTHROPIC_API_KEY.")
 
         model = model or self.primary_model
+        
+        # Claude Haiku has a 4096 token limit, cap max_tokens to avoid errors
+        effective_max_tokens = min(max_tokens, 4096)
 
-        logger.debug("calling_claude", model=model, max_tokens=max_tokens)
+        logger.debug("calling_claude", model=model, max_tokens=effective_max_tokens)
 
+        # Use the messages API via the client
         response = await self.anthropic_client.messages.create(
             model=model,
-            max_tokens=max_tokens,
+            max_tokens=effective_max_tokens,
             temperature=temperature,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
@@ -128,6 +133,10 @@ class AIService:
 
         model = model or settings.ai_model or "gpt-4-turbo-preview"
         
+        # Cap max_tokens for OpenAI models that have lower limits
+        # gpt-4-turbo-preview supports max 4096 completion tokens
+        openai_max_tokens = min(max_tokens, 4096)
+        
         response = await self.openai_client.chat.completions.create(
             model=model,
             messages=[
@@ -135,7 +144,7 @@ class AIService:
                 {"role": "user", "content": user_prompt},
             ],
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_tokens=openai_max_tokens,
         )
         
         return response.choices[0].message.content

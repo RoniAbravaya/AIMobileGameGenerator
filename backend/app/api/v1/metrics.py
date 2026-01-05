@@ -19,7 +19,7 @@ router = APIRouter()
 
 
 @router.get(
-    "",
+    "/summary",
     response_model=MetricsSummary,
     summary="Get metrics summary",
 )

@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     # AI Services - Claude AI Primary
     anthropic_api_key: Optional[str] = None  # Primary AI provider (Claude)
-    claude_model: str = "claude-3-5-sonnet-20241022"  # Default Claude model
+    claude_model: str = "claude-3-haiku-20240307"  # Default Claude model (using Haiku as Sonnet not available)
     openai_api_key: Optional[str] = None  # Fallback AI provider
     ai_model: str = "gpt-4-turbo-preview"  # Fallback model for OpenAI
 
