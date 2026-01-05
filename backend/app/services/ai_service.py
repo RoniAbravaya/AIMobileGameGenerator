@@ -33,6 +33,62 @@ CLAUDE_MODELS = {
     "claude-3-haiku": "claude-3-haiku-20240307",        # Fastest, good for simple tasks
 }
 
+def _strip_markdown_code_fences(text: str) -> str:
+    """
+    Remove surrounding markdown fences like ```json ... ```.
+    Keeps the inner content intact.
+    """
+    s = text.strip()
+    if not s.startswith("```"):
+        return s
+
+    # Common pattern: ```json\n{...}\n```
+    parts = s.split("```")
+    if len(parts) < 2:
+        return s
+    inner = parts[1].strip()
+    if inner.startswith("json"):
+        inner = inner[4:].strip()
+    return inner
+
+
+def _extract_json_span(text: str, open_char: str, close_char: str) -> Optional[str]:
+    """
+    Extract a JSON object/array substring from a larger string by taking the
+    first opening char and the last closing char.
+    """
+    start = text.find(open_char)
+    end = text.rfind(close_char)
+    if start == -1 or end == -1 or end <= start:
+        return None
+    return text[start : end + 1]
+
+
+def _parse_json_lenient(text: str, *, expect: str) -> Any:
+    """
+    Parse JSON with a couple of safe, non-AI heuristics:
+    - strip markdown fences
+    - extract the outermost object/array if extra text exists
+
+    expect: "object" or "array"
+    """
+    cleaned = _strip_markdown_code_fences(text)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    if expect == "object":
+        span = _extract_json_span(cleaned, "{", "}")
+    elif expect == "array":
+        span = _extract_json_span(cleaned, "[", "]")
+    else:
+        raise ValueError(f"Invalid expect={expect!r}")
+
+    if not span:
+        raise
+    return json.loads(span)
+
 
 class AIService:
     """
@@ -103,8 +159,11 @@ class AIService:
 
         model = model or self.primary_model
         
-        # Claude Haiku has a 4096 token limit, cap max_tokens to avoid errors
-        effective_max_tokens = min(max_tokens, 4096)
+        # Claude Haiku has a 4096 completion token limit; other models support more.
+        # Previous logic capped *all* models to 4096, which increased truncation risk.
+        effective_max_tokens = max_tokens
+        if "haiku" in model:
+            effective_max_tokens = min(max_tokens, 4096)
 
         logger.debug("calling_claude", model=model, max_tokens=effective_max_tokens)
 
@@ -250,7 +309,7 @@ Return a JSON object with EXACTLY this structure:
     }},
     "core_loop": {{
         "description": "What the player does repeatedly",
-        "session_length_seconds": 60-180,
+        "session_length_seconds": 120,
         "primary_action": "tap/swipe/drag/hold",
         "reward_cycle": "How player is rewarded"
     }},
@@ -263,7 +322,7 @@ Return a JSON object with EXACTLY this structure:
     }},
     "economy": {{
         "primary_currency": "coins/stars/points",
-        "earn_rate_per_level": number,
+        "earn_rate_per_level": 75,
         "uses": ["what currency is used for"]
     }},
     "fail_states": {{
@@ -317,20 +376,12 @@ Return a JSON object with EXACTLY this structure:
             system_prompt,
             user_prompt,
             temperature=temperature,
-            max_tokens=4096,
+            max_tokens=8192,
         )
 
         # Parse JSON response
         try:
-            # Clean response if it has markdown code blocks
-            response = response.strip()
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-                response = response.strip()
-            
-            gdd = json.loads(response)
+            gdd = _parse_json_lenient(response, expect="object")
             logger.info("gdd_generated_successfully", game_name=game_name)
             return gdd
         except json.JSONDecodeError as e:
@@ -460,14 +511,7 @@ Return only the JSON array, starting with ["""
 
         # Parse JSON
         try:
-            response = response.strip()
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-                response = response.strip()
-            
-            levels = json.loads(response)
+            levels = _parse_json_lenient(response, expect="array")
             return levels
         except json.JSONDecodeError as e:
             logger.error("level_config_parse_error", error=str(e))
@@ -565,13 +609,7 @@ Return a JSON object with this structure:
         )
 
         try:
-            response = response.strip()
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-                response = response.strip()
-            return json.loads(response)
+            return _parse_json_lenient(response, expect="object")
         except json.JSONDecodeError:
             return {
                 "quality_score": 70,

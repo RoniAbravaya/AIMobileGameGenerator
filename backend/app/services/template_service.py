@@ -9,6 +9,7 @@ Manages Flutter + Flame game templates:
 """
 
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import yaml
@@ -27,8 +28,9 @@ logger = structlog.get_logger()
 FLAME_TEMPLATES = {
     "platformer": {
         "repo": "flame-engine/flame",
-        "subpath": "examples/games/platformer",
-        "description": "Side-scrolling platformer with physics",
+        # Flame no longer ships a dedicated "platformer" example; use trex as closest stable template.
+        "subpath": "examples/games/trex",
+        "description": "Jump-based side-scrolling template (T-Rex style)",
     },
     "runner": {
         "repo": "flame-engine/flame",
@@ -37,8 +39,8 @@ FLAME_TEMPLATES = {
     },
     "puzzle": {
         "repo": "flame-engine/flame",
-        "subpath": "examples/games/padrern",
-        "description": "Pattern matching puzzle",
+        "subpath": "examples/games/padracing",
+        "description": "Pattern-based puzzle/racing hybrid",
     },
     "shooter": {
         "repo": "flame-engine/flame",
@@ -47,12 +49,12 @@ FLAME_TEMPLATES = {
     },
     "casual": {
         "repo": "flame-engine/flame",
-        "subpath": "examples/games/ember",
-        "description": "Simple tap-based casual game",
+        "subpath": "examples/games/crystal_ball",
+        "description": "Simple casual template (crystal_ball)",
     },
     "default": {
         "repo": "flame-engine/flame",
-        "subpath": "examples/games/ember",
+        "subpath": "examples/games/crystal_ball",
         "description": "Default Flame game template",
     },
 }
@@ -104,11 +106,8 @@ class TemplateService:
 
         try:
             # Clone the full repo first (shallow clone)
-            temp_dir = self.templates_dir / f"temp_{genre}"
-            
-            # Clean up if exists
-            if temp_dir.exists():
-                shutil.rmtree(temp_dir)
+            # Use a unique temp directory per run to avoid cross-task races (same genre).
+            temp_dir = Path(tempfile.mkdtemp(prefix=f"temp_{genre}_", dir=str(self.templates_dir)))
 
             # Clone
             clone_result = await self.github_service.clone_template(repo, str(temp_dir))
@@ -119,7 +118,7 @@ class TemplateService:
             # Extract the specific subpath if specified
             target = Path(target_path)
             if target.exists():
-                shutil.rmtree(target)
+                shutil.rmtree(target, ignore_errors=True)
             target.mkdir(parents=True, exist_ok=True)
 
             if subpath:
@@ -128,9 +127,10 @@ class TemplateService:
                     # Copy the subpath content
                     shutil.copytree(source, target, dirs_exist_ok=True)
                 else:
-                    # Subpath doesn't exist, use root
-                    logger.warning("subpath_not_found", subpath=subpath)
-                    shutil.copytree(temp_dir, target, dirs_exist_ok=True)
+                    # Subpath doesn't exist; avoid copying repo root (large monorepo) if possible.
+                    logger.warning("subpath_not_found", subpath=subpath, repo=repo)
+                    fallback = temp_dir / "examples"
+                    shutil.copytree(fallback if fallback.exists() else temp_dir, target, dirs_exist_ok=True)
             else:
                 shutil.copytree(temp_dir, target, dirs_exist_ok=True)
 
