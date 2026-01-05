@@ -114,15 +114,28 @@ class PostLaunchStep(BaseStepExecutor):
         result = await db.execute(
             select(AnalyticsEvent)
             .where(AnalyticsEvent.game_id == game_id)
-            .where(AnalyticsEvent.created_at >= since)
+            .where(AnalyticsEvent.received_at >= since)
         )
         events = result.scalars().all()
 
         # Calculate metrics
         total_events = len(events)
         event_counts = {}
+        total_scores = []
+        session_durations = []
+        
         for event in events:
-            event_counts[event.event_name] = event_counts.get(event.event_name, 0) + 1
+            event_counts[event.event_type] = event_counts.get(event.event_type, 0) + 1
+            
+            # Collect scores from level_complete events
+            if event.event_type == "level_complete" and event.properties:
+                score = event.properties.get("score", 0)
+                if score:
+                    total_scores.append(score)
+            
+            # Collect session durations from game events
+            if event.properties and "session_duration" in event.properties:
+                session_durations.append(event.properties["session_duration"])
 
         # Calculate key metrics
         game_starts = event_counts.get("game_start", 0)
@@ -137,11 +150,15 @@ class PostLaunchStep(BaseStepExecutor):
         fail_rate = level_fails / max(level_completes + level_fails, 1)
         ad_opt_in_rate = ad_completed / max(ad_shown, 1) if ad_shown > 0 else 0
 
+        # Calculate averages
+        average_score = sum(total_scores) / len(total_scores) if total_scores else 0
+        average_session_length = sum(session_durations) / len(session_durations) if session_durations else 0
+
         # Calculate retention proxy (users who completed level 3+)
         level_3_plus = sum(
             1 for e in events 
-            if e.event_name == "level_complete" 
-            and e.event_params.get("level", 0) >= 3
+            if e.event_type == "level_complete" 
+            and e.properties.get("level", 0) >= 3
         )
         retention_proxy = level_3_plus / max(game_starts, 1)
 
@@ -157,6 +174,8 @@ class PostLaunchStep(BaseStepExecutor):
             "ad_completed": ad_completed,
             "ad_opt_in_rate": ad_opt_in_rate,
             "retention_proxy": retention_proxy,
+            "average_score": average_score,
+            "average_session_length": average_session_length,
             "period_days": 30,
         }
 
@@ -189,20 +208,27 @@ class PostLaunchStep(BaseStepExecutor):
         metrics: Dict[str, Any],
         score: float,
     ) -> None:
-        """Store metrics in database."""
+        """Store aggregated metrics in database."""
+        from datetime import date as date_type
         
+        today = date_type.today()
+        
+        # Use the GameMetrics model which is for daily aggregates
         game_metrics = GameMetrics(
             game_id=game_id,
-            total_plays=metrics.get("game_starts", 0),
-            total_completions=metrics.get("level_completes", 0),
-            average_score=0,  # Would calculate from events
-            average_session_length=0,  # Would calculate from events
-            retention_day_1=metrics.get("retention_proxy", 0),
-            retention_day_7=0,
+            date=today,
+            sessions=metrics.get("game_starts", 0),
+            dau=len(set(e.get("user_id") for e in metrics.get("event_counts", {}).values() if e)),
+            avg_session_duration_seconds=int(metrics.get("average_session_length", 0)),
+            levels_completed=metrics.get("level_completes", 0),
+            levels_failed=metrics.get("level_fails", 0),
+            retention_d1=metrics.get("retention_proxy", 0),
+            retention_d7=0,  # Requires 7 days of data
+            retention_d30=0,  # Requires 30 days of data
             ad_impressions=metrics.get("ad_shown", 0),
-            ad_clicks=metrics.get("ad_completed", 0),
-            revenue_estimate=metrics.get("ad_completed", 0) * 0.01,  # Estimated $0.01 per ad
-            overall_score=score,
+            ad_revenue_cents=metrics.get("ad_completed", 0),  # $0.01 per completed ad
+            iap_revenue_cents=0,  # No IAP implemented yet
+            score=score,
         )
 
         db.add(game_metrics)

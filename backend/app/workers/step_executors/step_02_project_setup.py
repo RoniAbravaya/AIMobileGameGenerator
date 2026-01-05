@@ -283,14 +283,15 @@ class ProjectSetupStep(BaseStepExecutor):
                 if not (project_path / file).exists():
                     warnings.append(f"Missing file: {file}")
 
-        # Note: In production, would run flutter analyze
-        # subprocess.run(["flutter", "analyze"], check=True)
+        # Note: Flutter analyze runs in GitHub Actions CI, not on backend
+        # The backend generates code and pushes to GitHub
+        # GitHub Actions workflow validates via flutter analyze during build
 
         return {
             "valid": len(errors) == 0,
             "errors": errors,
             "warnings": warnings,
-            "flutter_analyze": "skipped",  # Would run in production with Flutter SDK
+            "flutter_analyze": "delegated_to_ci",  # Runs in GitHub Actions build workflow
         }
 
     async def rollback(self, db: AsyncSession, game: Game) -> bool:
