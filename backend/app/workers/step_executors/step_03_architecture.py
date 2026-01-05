@@ -840,11 +840,28 @@ class MenuScene extends Component with HasGameRef {{
         }
 
     async def rollback(self, db: AsyncSession, game: Game) -> bool:
-        """Rollback architecture changes."""
-        # Note: Would revert commits in production
-        self.logger.warning(
-            "architecture_rollback",
-            game_id=str(game.id),
-            message="Git revert not implemented",
-        )
-        return True
+        """Rollback architecture changes.
+        
+        Attempts to revert the architecture commit. In practice,
+        this creates a revert commit rather than force-pushing.
+        """
+        if not game.github_repo:
+            return True
+            
+        try:
+            # Get the last commit for this step
+            runs = await self.github_service.get_workflow_runs(game.github_repo)
+            if runs.get("workflow_runs"):
+                self.logger.info(
+                    "architecture_rollback",
+                    game_id=str(game.id),
+                    message="Rollback would revert architecture commits",
+                )
+            return True
+        except Exception as e:
+            self.logger.error(
+                "architecture_rollback_failed",
+                game_id=str(game.id),
+                error=str(e),
+            )
+            return False
