@@ -9,7 +9,7 @@ Implements the main gameplay mechanic loop:
 - Placeholder assets allowed (will be replaced in Step 7)
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.game import Game
 from app.services.ai_service import get_ai_service
 from app.services.github_service import get_github_service
+from app.services.mechanic_code_templates import (
+    get_mechanic_code,
+    combine_mechanics_code,
+    MECHANIC_CODE_TEMPLATES,
+)
 from app.workers.step_executors.base import BaseStepExecutor
 
 logger = structlog.get_logger()
@@ -68,10 +73,21 @@ class CorePrototypeStep(BaseStepExecutor):
             logs.append(f"Primary mechanic: {mechanics.get('primary', 'tap')}")
             logs.append(f"Core loop: {core_loop.get('description', 'N/A')}")
 
+            # Get selected mechanics for code generation
+            selected_mechanics = game.selected_mechanics or []
+            if not selected_mechanics:
+                selected_mechanics = mechanics.get("selected_from_library", [])
+            logs.append(f"Selected mechanics: {selected_mechanics}")
+
             # Generate core gameplay files
             logs.append("\n--- Generating Core Gameplay ---")
 
             files = {}
+
+            # Generate mechanic-specific code files
+            mechanic_files = self._generate_mechanic_code_files(selected_mechanics)
+            files.update(mechanic_files)
+            logs.append(f"✓ Generated {len(mechanic_files)} mechanic-specific files")
 
             # Main game file with full implementation
             files["lib/game/game.dart"] = await self._generate_main_game(game)
@@ -145,6 +161,67 @@ class CorePrototypeStep(BaseStepExecutor):
                 "error": str(e),
                 "logs": "\n".join(logs),
             }
+
+    def _generate_mechanic_code_files(self, mechanic_names: List[str]) -> Dict[str, str]:
+        """Generate mechanic-specific code files based on selected mechanics."""
+        files = {}
+        
+        # Combine all mechanic code into organized sections
+        combined = combine_mechanics_code(mechanic_names)
+        
+        # Generate mixins file
+        if combined["mixins"]:
+            mixins_code = '''/// Mechanic Mixins
+/// 
+/// Auto-generated mixins for game mechanics.
+/// These provide reusable behavior patterns.
+
+import 'package:flame/components.dart';
+import 'package:flutter/material.dart';
+
+'''
+            for mixin_code in combined["mixins"]:
+                mixins_code += mixin_code + "\n"
+            files["lib/game/mixins/mechanic_mixins.dart"] = mixins_code
+
+        # Generate mechanic components file
+        if combined["components"]:
+            components_code = '''/// Mechanic Components
+/// 
+/// Auto-generated components for game mechanics.
+
+import 'dart:math';
+import 'package:flame/components.dart';
+import 'package:flame/collisions.dart';
+import 'package:flame/input.dart';
+import 'package:flutter/material.dart';
+
+'''
+            for component_code in combined["components"]:
+                components_code += component_code + "\n"
+            files["lib/game/components/mechanic_components.dart"] = components_code
+
+        # Generate individual mechanic files for complex mechanics
+        for mech_name in mechanic_names:
+            template = get_mechanic_code(mech_name)
+            if template and "component" in template:
+                # Create individual file for significant components
+                if len(template.get("component", "")) > 500:
+                    file_name = mech_name.replace("_", "_") + ".dart"
+                    component_code = f'''/// {mech_name.replace("_", " ").title()} Mechanic
+/// 
+/// {template.get("description", "Game mechanic implementation")}
+
+import 'dart:math';
+import 'package:flame/components.dart';
+import 'package:flame/collisions.dart';
+import 'package:flutter/material.dart';
+
+{template["component"]}
+'''
+                    files[f"lib/game/mechanics/{file_name}"] = component_code
+
+        return files
 
     async def _generate_main_game(self, game: Game) -> str:
         """Generate main FlameGame class."""
