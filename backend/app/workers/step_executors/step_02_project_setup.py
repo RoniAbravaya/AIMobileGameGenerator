@@ -2,12 +2,16 @@
 Step 2: Project Setup
 
 Creates the GitHub repository and scaffolds the Flutter + Flame project:
-- Clone/fork selected Flame template
+- Create GitHub repository for the game
+- Clone selected Flame template
 - Apply GameFactory structure
-- Configure Flutter flavors (dev/staging/prod)
-- Validate with flutter analyze
+- Configure Flutter project (pubspec.yaml, etc.)
+- Set up GitHub Actions for CI/CD
+- Validate with flutter analyze (if Flutter SDK available)
 """
 
+import tempfile
+from pathlib import Path
 from typing import Any, Dict
 
 import structlog
@@ -15,48 +19,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.game import Game
+from app.services.github_service import get_github_service
+from app.services.template_service import get_template_service
 from app.workers.step_executors.base import BaseStepExecutor
 
 logger = structlog.get_logger()
 
 
-# Available Flame templates
-FLAME_TEMPLATES = {
-    "platformer": {
-        "repo": "flame-games/endless_runner",
-        "description": "Side-scrolling platformer template",
-    },
-    "runner": {
-        "repo": "flame-games/endless_runner",
-        "description": "Endless runner template",
-    },
-    "puzzle": {
-        "repo": "flame-games/snake",
-        "description": "Grid-based game template",
-    },
-    "shooter": {
-        "repo": "flame-games/asteroids",
-        "description": "Space shooter template",
-    },
-    "casual": {
-        "repo": "flame-games/flappy_bird",
-        "description": "Simple tap-based template",
-    },
-    "default": {
-        "repo": "flame-engine/flame",
-        "description": "Base Flame template",
-    },
-}
-
-
 class ProjectSetupStep(BaseStepExecutor):
-    """Step 2: Create GitHub repo and scaffold project."""
+    """
+    Step 2: Create GitHub repo and scaffold project.
+    
+    Uses real GitHub API for repository creation and 
+    Template service for project scaffolding.
+    """
 
     step_number = 2
     step_name = "project_setup"
 
+    def __init__(self):
+        super().__init__()
+        self.github_service = get_github_service()
+        self.template_service = get_template_service()
+
     async def execute(self, db: AsyncSession, game: Game) -> Dict[str, Any]:
-        """Create the project structure."""
+        """Create the project structure with real GitHub integration."""
         self.logger.info("setting_up_project", game_id=str(game.id))
 
         logs = []
@@ -71,48 +58,109 @@ class ProjectSetupStep(BaseStepExecutor):
                     "logs": "\n".join(logs),
                 }
 
-            # Select template based on genre
-            template = self._select_template(game.genre)
-            logs.append(f"Selected template: {template['repo']}")
-
-            # Create GitHub repository
+            # Generate repository name
             repo_name = f"gamefactory-{game.slug}"
-            logs.append(f"Creating repository: {repo_name}")
+            logs.append(f"Repository name: {repo_name}")
 
-            # In production, this would call GitHub API
-            # For now, we simulate the creation
+            # Create temporary directory for project files
+            work_dir = Path(tempfile.mkdtemp(prefix=f"gamefactory_{game.slug}_"))
+            project_path = work_dir / repo_name
+            logs.append(f"Working directory: {work_dir}")
+
+            # Step 2.1: Create GitHub repository
+            logs.append("\n--- Creating GitHub Repository ---")
             github_result = await self._create_github_repo(repo_name, game)
 
             if not github_result["success"]:
                 return {
                     "success": False,
-                    "error": github_result.get("error", "Failed to create repository"),
+                    "error": f"Failed to create repository: {github_result.get('error', 'Unknown error')}",
                     "logs": "\n".join(logs),
                 }
 
-            logs.append(f"Repository created: {github_result['url']}")
+            logs.append(f"✓ Repository created: {github_result['url']}")
 
-            # Scaffold project structure
-            scaffold_result = await self._scaffold_project(
-                repo_name,
-                template,
-                game,
+            # Step 2.2: Create project structure
+            logs.append("\n--- Creating Project Structure ---")
+            package_name = f"com.gamefactory.{game.slug.replace('-', '_')}"
+            
+            structure_result = await self.template_service.create_project_structure(
+                target_path=str(project_path),
+                game_name=game.name,
+                package_name=package_name,
             )
 
-            if not scaffold_result["success"]:
+            if not structure_result["success"]:
                 return {
                     "success": False,
-                    "error": scaffold_result.get("error", "Failed to scaffold project"),
+                    "error": f"Failed to create project structure: {structure_result.get('error', 'Unknown error')}",
                     "logs": "\n".join(logs),
                 }
 
-            logs.append("Project scaffolded successfully")
+            logs.append(f"✓ Project structure created with {structure_result['files_created']} files")
 
-            # Update game with repo info
+            # Step 2.3: Clone and integrate Flame template
+            logs.append("\n--- Integrating Flame Template ---")
+            template_info = self.template_service.get_template_for_genre(game.genre)
+            logs.append(f"Selected template: {template_info['repo']} ({template_info['description']})")
+
+            # Clone template to temp location
+            template_path = work_dir / "template"
+            clone_result = await self.template_service.clone_template(
+                genre=game.genre,
+                target_path=str(template_path),
+            )
+
+            if clone_result["success"]:
+                logs.append(f"✓ Template cloned: {len(clone_result.get('files', []))} files")
+                # Merge template with project structure
+                await self._merge_template(template_path, project_path, game.gdd_spec)
+                logs.append("✓ Template merged with project")
+            else:
+                logs.append(f"⚠ Template clone failed: {clone_result.get('error', 'Unknown')} - using base structure")
+
+            # Step 2.4: Inject GameFactory architecture
+            logs.append("\n--- Injecting GameFactory Architecture ---")
+            inject_result = await self.template_service.inject_gamefactory_architecture(
+                target_path=str(project_path),
+                gdd=game.gdd_spec,
+            )
+
+            if inject_result["success"]:
+                logs.append(f"✓ Architecture injected: {len(inject_result['files_created'])} files")
+            else:
+                logs.append(f"⚠ Architecture injection failed: {inject_result.get('error', 'Unknown')}")
+
+            # Step 2.5: Push to GitHub
+            logs.append("\n--- Pushing to GitHub ---")
+            push_result = await self.github_service.push_to_repository(
+                repo_name=repo_name,
+                local_path=str(project_path),
+                commit_message=f"Initial commit: {game.name} - Generated by GameFactory",
+            )
+
+            if not push_result["success"]:
+                logs.append(f"⚠ Push failed: {push_result.get('error', 'Unknown')}")
+                # Continue anyway - repo exists, we'll push later
+            else:
+                logs.append("✓ Code pushed to repository")
+
+            # Step 2.6: Set up GitHub Actions
+            logs.append("\n--- Setting Up CI/CD ---")
+            actions_result = await self.github_service.setup_github_actions(repo_name)
+
+            if actions_result["success"]:
+                logs.append("✓ GitHub Actions workflow configured")
+            else:
+                logs.append(f"⚠ GitHub Actions setup failed: {actions_result.get('error', 'Unknown')}")
+
+            # Update game record
             game.github_repo = repo_name
             game.github_repo_url = github_result["url"]
-            game.selected_template = template["repo"]
+            game.selected_template = template_info["repo"]
             await db.commit()
+
+            logs.append("\n--- Project Setup Complete ---")
 
             # Validate
             validation = await self.validate(
@@ -121,7 +169,8 @@ class ProjectSetupStep(BaseStepExecutor):
                 {
                     "github_repo": repo_name,
                     "github_url": github_result["url"],
-                    "template": template["repo"],
+                    "template": template_info["repo"],
+                    "local_path": str(project_path),
                 },
             )
 
@@ -130,8 +179,10 @@ class ProjectSetupStep(BaseStepExecutor):
                 "artifacts": {
                     "github_repo": repo_name,
                     "github_url": github_result["url"],
-                    "template": template["repo"],
-                    "local_path": scaffold_result.get("local_path"),
+                    "clone_url": github_result.get("clone_url"),
+                    "template": template_info["repo"],
+                    "local_path": str(project_path),
+                    "package_name": package_name,
                 },
                 "validation": validation,
                 "logs": "\n".join(logs),
@@ -140,17 +191,12 @@ class ProjectSetupStep(BaseStepExecutor):
 
         except Exception as e:
             self.logger.exception("project_setup_failed", error=str(e))
-            logs.append(f"Error: {str(e)}")
+            logs.append(f"\n✗ Error: {str(e)}")
             return {
                 "success": False,
                 "error": str(e),
                 "logs": "\n".join(logs),
             }
-
-    def _select_template(self, genre: str) -> Dict[str, str]:
-        """Select the appropriate Flame template for the genre."""
-        genre_lower = genre.lower()
-        return FLAME_TEMPLATES.get(genre_lower, FLAME_TEMPLATES["default"])
 
     async def _create_github_repo(
         self,
@@ -158,100 +204,46 @@ class ProjectSetupStep(BaseStepExecutor):
         game: Game,
     ) -> Dict[str, Any]:
         """Create a GitHub repository for the game."""
-        # In production, this would use PyGithub or GitHub API
-        # For now, return simulated success
+        description = f"{game.name} - A {game.genre} mobile game generated by GameFactory"
+        
+        return await self.github_service.create_repository(
+            name=repo_name,
+            description=description,
+            private=False,
+            auto_init=True,  # Initialize with README
+        )
 
-        if not settings.github_token:
-            # Simulation mode
-            return {
-                "success": True,
-                "url": f"https://github.com/{settings.github_org}/{repo_name}",
-                "clone_url": f"https://github.com/{settings.github_org}/{repo_name}.git",
-            }
-
-        try:
-            from github import Github
-
-            g = Github(settings.github_token)
-
-            # Try to get org, fall back to user
-            try:
-                owner = g.get_organization(settings.github_org)
-            except Exception:
-                owner = g.get_user()
-
-            # Create repository
-            repo = owner.create_repo(
-                name=repo_name,
-                description=f"GameFactory generated game: {game.name}",
-                private=False,
-                auto_init=True,
-            )
-
-            return {
-                "success": True,
-                "url": repo.html_url,
-                "clone_url": repo.clone_url,
-            }
-
-        except Exception as e:
-            self.logger.error("github_repo_creation_failed", error=str(e))
-            return {
-                "success": False,
-                "error": str(e),
-            }
-
-    async def _scaffold_project(
+    async def _merge_template(
         self,
-        repo_name: str,
-        template: Dict[str, str],
-        game: Game,
-    ) -> Dict[str, Any]:
-        """Scaffold the Flutter + Flame project structure."""
-        # In production, this would:
-        # 1. Clone the template repo
-        # 2. Modify pubspec.yaml
-        # 3. Set up folder structure
-        # 4. Configure flavors
-        # 5. Push to GitHub
+        template_path: Path,
+        project_path: Path,
+        gdd: Dict[str, Any],
+    ):
+        """Merge template files with project structure."""
+        import shutil
 
-        # For now, return simulated success with structure definition
-        project_structure = {
-            "lib/": {
-                "main.dart": "Entry point",
-                "game/": {
-                    "game.dart": "Main FlameGame class",
-                    "components/": "Game components",
-                    "scenes/": "Game scenes",
-                },
-                "services/": {
-                    "analytics_service.dart": "Analytics wrapper",
-                    "ad_service.dart": "Ads integration",
-                    "storage_service.dart": "Local storage",
-                },
-                "ui/": {
-                    "overlays/": "Flutter UI overlays",
-                    "screens/": "Menu screens",
-                },
-                "config/": {
-                    "levels.dart": "Level configurations",
-                    "constants.dart": "Game constants",
-                },
-            },
-            "assets/": {
-                "images/": "Sprite assets",
-                "audio/": "Sound effects and music",
-            },
-            "test/": "Unit and widget tests",
-            "android/": "Android platform files",
-            "ios/": "iOS platform files",
-        }
+        # Files/directories to copy from template
+        merge_items = [
+            "lib/game",  # Game code
+            "assets",    # Asset files
+            "test",      # Test files
+        ]
 
-        return {
-            "success": True,
-            "local_path": f"/tmp/gamefactory/{repo_name}",
-            "structure": project_structure,
-        }
+        for item in merge_items:
+            src = template_path / item
+            dst = project_path / item
+
+            if src.exists():
+                if src.is_dir():
+                    # Merge directories
+                    if dst.exists():
+                        shutil.copytree(src, dst, dirs_exist_ok=True)
+                    else:
+                        shutil.copytree(src, dst)
+                else:
+                    # Copy file
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(src, dst)
 
     async def validate(
         self,
@@ -259,7 +251,7 @@ class ProjectSetupStep(BaseStepExecutor):
         game: Game,
         artifacts: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Validate project setup with flutter analyze."""
+        """Validate project setup."""
         errors = []
         warnings = []
 
@@ -270,23 +262,51 @@ class ProjectSetupStep(BaseStepExecutor):
         if not artifacts.get("github_url"):
             errors.append("GitHub URL not set")
 
-        # In production, would run:
-        # subprocess.run(["flutter", "analyze"], check=True)
-        # subprocess.run(["flutter", "build", "apk", "--debug"], check=True)
-
-        # For now, simulate validation
-        if artifacts.get("template"):
-            self.logger.info(
-                "project_validated",
-                repo=artifacts.get("github_repo"),
-                template=artifacts.get("template"),
-            )
-        else:
+        # Check template was selected
+        if not artifacts.get("template"):
             warnings.append("No template selected")
+
+        # Check local project exists
+        local_path = artifacts.get("local_path")
+        if local_path:
+            project_path = Path(local_path)
+            
+            # Check essential files exist
+            essential_files = [
+                "pubspec.yaml",
+                "lib/main.dart",
+                "lib/game/game.dart",
+                "lib/services/analytics_service.dart",
+            ]
+
+            for file in essential_files:
+                if not (project_path / file).exists():
+                    warnings.append(f"Missing file: {file}")
+
+        # Note: In production, would run flutter analyze
+        # subprocess.run(["flutter", "analyze"], check=True)
 
         return {
             "valid": len(errors) == 0,
             "errors": errors,
             "warnings": warnings,
-            "flutter_analyze": "passed",  # Simulated
+            "flutter_analyze": "skipped",  # Would run in production with Flutter SDK
         }
+
+    async def rollback(self, db: AsyncSession, game: Game) -> bool:
+        """Rollback the project setup step."""
+        # Note: Would delete GitHub repo in production
+        # For safety, we don't auto-delete repos
+        
+        self.logger.warning(
+            "project_setup_rollback",
+            game_id=str(game.id),
+            message="GitHub repo not auto-deleted for safety",
+        )
+
+        game.github_repo = None
+        game.github_repo_url = None
+        game.selected_template = None
+        await db.commit()
+
+        return True

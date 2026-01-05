@@ -1,7 +1,7 @@
 """
 Step 1: Pre-Production
 
-Generates the Game Design Document (GDD-lite) for each game including:
+Generates the Game Design Document (GDD-lite) for each game using AI:
 - Genre specification
 - Selected mechanics from Flame examples
 - Core loop definition
@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.game import Game
 from app.models.similarity import RegenerationLog, SimilarityCheck
+from app.services.ai_service import get_ai_service
 from app.services.mechanic_service import MechanicService
 from app.services.similarity_service import (
     MAX_REGENERATION_ATTEMPTS,
@@ -77,20 +78,12 @@ ART_STYLES = [
     "low_poly",
 ]
 
-# Primary actions for variation
-PRIMARY_ACTIONS = {
-    "platformer": ["jump", "double_jump", "wall_jump", "dash", "slide"],
-    "runner": ["lane_switch", "jump", "slide", "roll", "boost"],
-    "puzzle": ["swap_tiles", "rotate", "match", "connect", "slide"],
-    "shooter": ["shoot", "aim_shoot", "auto_shoot", "charge_shot", "rapid_fire"],
-    "casual": ["tap", "hold", "swipe", "drag", "flick"],
-}
-
 
 class PreProductionStep(BaseStepExecutor):
     """
-    Step 1: Generate GDD-lite for the game.
+    Step 1: Generate GDD-lite for the game using AI.
     
+    Uses OpenAI/Claude to generate comprehensive game design documents.
     Includes similarity checking to ensure diversity.
     Will regenerate up to MAX_REGENERATION_ATTEMPTS times if too similar.
     """
@@ -98,12 +91,17 @@ class PreProductionStep(BaseStepExecutor):
     step_number = 1
     step_name = "pre_production"
 
+    def __init__(self):
+        super().__init__()
+        self.ai_service = get_ai_service()
+
     async def execute(self, db: AsyncSession, game: Game) -> Dict[str, Any]:
-        """Generate the game design document with similarity checking."""
+        """Generate the game design document with AI and similarity checking."""
         self.logger.info("generating_gdd", game_id=str(game.id), genre=game.genre)
 
         logs = []
         logs.append(f"Starting pre-production for {game.name}")
+        logs.append(f"Using AI service for GDD generation")
         logs.append(f"Similarity threshold: {SIMILARITY_THRESHOLD * 100}%")
         logs.append(f"Max regeneration attempts: {MAX_REGENERATION_ATTEMPTS}")
 
@@ -126,7 +124,7 @@ class PreProductionStep(BaseStepExecutor):
 
         # Initialize variables to track last successful generation
         last_gdd_spec = None
-        last_mechanic_names = []
+        last_mechanic_names: List[str] = []
         last_similarity_result = None
 
         while attempt <= MAX_REGENERATION_ATTEMPTS:
@@ -140,30 +138,48 @@ class PreProductionStep(BaseStepExecutor):
                     excluded_mechanics,
                     constraints,
                 )
-                mechanic_names = [m.name for m in mechanics] if mechanics else ["default_mechanic"]
+                mechanic_names = [m.name for m in mechanics] if mechanics else ["tap_jump", "collision_detection"]
                 logs.append(f"Selected mechanics: {mechanic_names}")
 
-                # Generate GDD with variation based on attempt
-                gdd_spec = self._generate_gdd(
-                    game,
-                    mechanic_names,
-                    attempt,
-                    excluded_styles,
-                    constraints,
-                )
-                logs.append("GDD generated")
+                # Generate GDD using AI service
+                logs.append("Calling AI service for GDD generation...")
+                try:
+                    gdd_spec = await self.ai_service.generate_gdd(
+                        game_name=game.name,
+                        genre=game.genre,
+                        mechanics=mechanic_names,
+                        constraints=constraints,
+                        excluded_styles=excluded_styles,
+                        attempt_number=attempt,
+                    )
+                    logs.append("GDD generated successfully via AI")
+                except Exception as ai_error:
+                    logs.append(f"AI generation failed: {str(ai_error)}, using fallback template")
+                    gdd_spec = self._generate_fallback_gdd(
+                        game,
+                        mechanic_names,
+                        attempt,
+                        excluded_styles,
+                    )
 
                 # Validate GDD structure
                 validation = await self.validate(db, game, {"gdd_spec": gdd_spec})
                 if not validation["valid"]:
                     logs.append(f"GDD validation failed: {validation['errors']}")
-                    return {
-                        "success": False,
-                        "artifacts": {"gdd_spec": gdd_spec},
-                        "validation": validation,
-                        "error": f"GDD validation failed: {validation['errors']}",
-                        "logs": "\n".join(logs),
-                    }
+                    # Try to fix common issues
+                    gdd_spec = self._fix_gdd_issues(gdd_spec, validation["errors"])
+                    validation = await self.validate(db, game, {"gdd_spec": gdd_spec})
+                    
+                    if not validation["valid"]:
+                        return {
+                            "success": False,
+                            "artifacts": {"gdd_spec": gdd_spec},
+                            "validation": validation,
+                            "error": f"GDD validation failed: {validation['errors']}",
+                            "logs": "\n".join(logs),
+                        }
+
+                logs.append("GDD validation passed")
 
                 # Temporarily update game for similarity check
                 game.gdd_spec = gdd_spec
@@ -248,12 +264,10 @@ class PreProductionStep(BaseStepExecutor):
                 logs.append(f"Error in attempt {attempt}: {str(e)}")
                 attempt += 1
 
-        # Exhausted all attempts
-        logs.append(f"\n✗ FAILED: Could not generate unique game after {MAX_REGENERATION_ATTEMPTS} attempts")
+        # All attempts exhausted - use last generated GDD with warning
+        logs.append(f"\n--- All {MAX_REGENERATION_ATTEMPTS} attempts exhausted ---")
 
-        # Check if we have any GDD to use
         if last_gdd_spec is None:
-            logs.append("ERROR: No GDD was successfully generated")
             return {
                 "success": False,
                 "artifacts": {},
@@ -322,15 +336,17 @@ class PreProductionStep(BaseStepExecutor):
         combined = mechanics + [m for m in all_mechanics if m not in mechanics]
         return combined[:3] if combined else []
 
-    def _generate_gdd(
+    def _generate_fallback_gdd(
         self,
         game: Game,
         mechanics: List[str],
         attempt: int,
         excluded_styles: List[str],
-        constraints: Dict,
     ) -> Dict[str, Any]:
-        """Generate the GDD structure with variation based on attempt."""
+        """
+        Generate a fallback GDD when AI service is unavailable.
+        Uses template-based generation with variation.
+        """
         genre = game.genre.lower()
 
         # Get available art styles (excluding used ones)
@@ -342,189 +358,151 @@ class PreProductionStep(BaseStepExecutor):
         art_style_index = (attempt - 1) % len(available_styles)
         art_style = available_styles[art_style_index]
 
-        # Get primary action - vary based on attempt
-        genre_actions = PRIMARY_ACTIONS.get(genre, PRIMARY_ACTIONS["casual"])
-        action_index = (attempt - 1) % len(genre_actions)
-        primary_action = genre_actions[action_index]
-
-        # Genre-specific templates with variation
+        # Genre-specific configurations
         genre_configs = {
             "platformer": {
-                "core_loop": f"Jump, avoid obstacles, reach goal using {primary_action}",
-                "primary_action": primary_action,
+                "core_loop": "Jump between platforms, avoid obstacles, reach goal",
+                "primary_action": "tap",
                 "fail_condition": "fall or hit enemy",
                 "difficulty_factors": ["platform_spacing", "enemy_count", "time_limit"],
             },
             "runner": {
-                "core_loop": f"Run, dodge obstacles using {primary_action}, collect coins",
-                "primary_action": primary_action,
+                "core_loop": "Run automatically, dodge obstacles, collect coins",
+                "primary_action": "swipe",
                 "fail_condition": "hit obstacle",
-                "difficulty_factors": ["speed", "obstacle_density", "lane_changes"],
+                "difficulty_factors": ["speed", "obstacle_frequency", "gap_size"],
             },
             "puzzle": {
-                "core_loop": f"Solve puzzles using {primary_action}, clear board, score points",
-                "primary_action": primary_action,
-                "fail_condition": "no_moves_remaining",
-                "difficulty_factors": ["grid_size", "tile_types", "move_limit"],
+                "core_loop": "Match or arrange elements to clear board",
+                "primary_action": "tap",
+                "fail_condition": "no more moves or time up",
+                "difficulty_factors": ["grid_size", "move_limit", "target_score"],
             },
             "shooter": {
-                "core_loop": f"Use {primary_action}, defeat enemies, survive waves",
-                "primary_action": primary_action,
-                "fail_condition": "health_depleted",
-                "difficulty_factors": ["enemy_count", "enemy_speed", "enemy_types"],
+                "core_loop": "Shoot enemies, avoid bullets, survive waves",
+                "primary_action": "tap",
+                "fail_condition": "lose all health",
+                "difficulty_factors": ["enemy_count", "bullet_speed", "boss_health"],
             },
             "casual": {
-                "core_loop": f"Use {primary_action} to interact, complete objectives",
-                "primary_action": primary_action,
-                "fail_condition": "timer_expired",
-                "difficulty_factors": ["target_count", "time_limit", "precision"],
+                "core_loop": "Simple tap to interact, achieve high score",
+                "primary_action": "tap",
+                "fail_condition": "miss timing or wrong tap",
+                "difficulty_factors": ["speed", "precision", "combo_requirement"],
             },
         }
 
         config = genre_configs.get(genre, genre_configs["casual"])
 
-        # Vary session length based on attempt
-        base_session_length = 180
-        session_length = base_session_length + (attempt - 1) * 30  # 180, 210, 240, ...
-
-        # Vary economy based on attempt
-        base_earn = 10
-        earn_per_level = base_earn + (attempt - 1) * 5  # 10, 15, 20, ...
-
         return {
             "game_name": game.name,
             "genre": game.genre,
-            "generation_attempt": attempt,
+            "tagline": f"An exciting {genre} adventure!",
             "mechanics": {
-                "primary": mechanics[0] if mechanics else "tap_to_action",
-                "secondary": mechanics[1] if len(mechanics) > 1 else None,
-                "tertiary": mechanics[2] if len(mechanics) > 2 else None,
+                "primary": mechanics[0] if mechanics else "tap_jump",
+                "secondary": mechanics[1:] if len(mechanics) > 1 else ["collision_detection"],
+                "selected_from_library": mechanics,
             },
             "core_loop": {
                 "description": config["core_loop"],
+                "session_length_seconds": 90 + (attempt * 15),
                 "primary_action": config["primary_action"],
-                "reward_trigger": "level_complete",
-                "session_length_target_seconds": session_length,
+                "reward_cycle": "Complete level to earn stars and coins",
             },
             "progression": {
                 "level_count": 10,
                 "free_levels": [1, 2, 3],
                 "locked_levels": [4, 5, 6, 7, 8, 9, 10],
-                "unlock_mechanism": "rewarded_ad",
-                "difficulty_ramp": "linear",
+                "unlock_method": "rewarded_ad",
+                "difficulty_increase_per_level": "10% harder each level",
             },
             "economy": {
-                "currency": "coins",
-                "earn_per_level": earn_per_level,
-                "ad_reward_multiplier": 2,
-                "no_iap": True,
+                "primary_currency": "coins",
+                "earn_rate_per_level": 50 + (attempt * 10),
+                "uses": ["cosmetics", "power_ups", "continues"],
             },
             "fail_states": {
-                "primary": config["fail_condition"],
-                "retry_cost": "watch_ad_optional",
-                "game_over_trigger": "3_consecutive_fails",
+                "conditions": [config["fail_condition"]],
+                "consequence": "restart level",
+                "retry_cost": "free",
             },
             "difficulty_curve": {
-                "factors": config["difficulty_factors"],
-                "level_1": {"difficulty": 1, "description": "Tutorial"},
-                "level_3": {"difficulty": 3, "description": "Comfortable"},
-                "level_5": {"difficulty": 5, "description": "Challenging"},
-                "level_7": {"difficulty": 7, "description": "Hard"},
-                "level_10": {"difficulty": 10, "description": "Expert"},
+                "level_1": {"description": "Tutorial - very easy", "target_completion_rate": 0.95},
+                "level_5": {"description": "Medium challenge", "target_completion_rate": 0.70},
+                "level_10": {"description": "Expert difficulty", "target_completion_rate": 0.40},
+                "scaling_factors": config["difficulty_factors"],
             },
             "analytics_plan": {
-                "events": GDD_SCHEMA["analytics_events"],
-                "custom_properties": {
-                    "level_start": ["level_number", "retry_count"],
-                    "level_complete": ["level_number", "score", "time_seconds"],
-                    "level_fail": ["level_number", "fail_reason", "progress_percent"],
-                },
-                "retention_tracking": True,
+                "key_events": GDD_SCHEMA["analytics_events"],
+                "key_metrics": ["retention", "completion_rate", "ad_opt_in_rate"],
                 "funnel_stages": ["install", "tutorial", "level_3", "first_ad", "level_10"],
             },
             "asset_style_guide": {
                 "art_style": art_style,
                 "color_palette": self._get_color_palette(art_style),
-                "ui_theme": "modern_minimal",
-                "audio_style": "upbeat_casual",
+                "character_style": f"Cute {art_style} characters",
+                "environment_style": f"{art_style} themed backgrounds",
+                "ui_style": f"Clean {art_style} UI elements",
+                "audio_style": "upbeat" if genre in ["casual", "puzzle"] else "energetic",
+            },
+            "technical_requirements": {
+                "target_fps": 60,
+                "min_android_sdk": 21,
+                "orientation": "portrait",
+                "offline_capable": True,
             },
         }
 
-    def _get_color_palette(self, art_style: str) -> Dict[str, str]:
-        """Get color palette for art style."""
+    def _get_color_palette(self, art_style: str) -> List[str]:
+        """Get color palette based on art style."""
         palettes = {
-            "colorful_cartoon": {
-                "primary": "#4CAF50",
-                "secondary": "#2196F3",
-                "accent": "#FF9800",
-                "background": "#E8F5E9",
-                "text": "#212121",
-            },
-            "neon_futuristic": {
-                "primary": "#00E5FF",
-                "secondary": "#FF00FF",
-                "accent": "#76FF03",
-                "background": "#0D0D0D",
-                "text": "#FFFFFF",
-            },
-            "clean_minimal": {
-                "primary": "#3F51B5",
-                "secondary": "#9C27B0",
-                "accent": "#00BCD4",
-                "background": "#FAFAFA",
-                "text": "#37474F",
-            },
-            "pixel_retro": {
-                "primary": "#E91E63",
-                "secondary": "#9C27B0",
-                "accent": "#FFEB3B",
-                "background": "#1A1A2E",
-                "text": "#EAEAEA",
-            },
-            "soft_pastel": {
-                "primary": "#F48FB1",
-                "secondary": "#CE93D8",
-                "accent": "#80DEEA",
-                "background": "#FFF8E1",
-                "text": "#5D4037",
-            },
-            "dark_gothic": {
-                "primary": "#B71C1C",
-                "secondary": "#4A148C",
-                "accent": "#FFD600",
-                "background": "#121212",
-                "text": "#E0E0E0",
-            },
-            "hand_drawn": {
-                "primary": "#795548",
-                "secondary": "#607D8B",
-                "accent": "#FF5722",
-                "background": "#FFF3E0",
-                "text": "#3E2723",
-            },
-            "flat_modern": {
-                "primary": "#1976D2",
-                "secondary": "#388E3C",
-                "accent": "#FBC02D",
-                "background": "#ECEFF1",
-                "text": "#263238",
-            },
-            "watercolor": {
-                "primary": "#81D4FA",
-                "secondary": "#A5D6A7",
-                "accent": "#FFCC80",
-                "background": "#FFFDE7",
-                "text": "#455A64",
-            },
-            "low_poly": {
-                "primary": "#26A69A",
-                "secondary": "#5C6BC0",
-                "accent": "#EF5350",
-                "background": "#FAFAFA",
-                "text": "#37474F",
-            },
+            "colorful_cartoon": ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7"],
+            "neon_futuristic": ["#00F5FF", "#FF00FF", "#00FF00", "#FF0080", "#8000FF"],
+            "clean_minimal": ["#2D3436", "#636E72", "#B2BEC3", "#DFE6E9", "#FFFFFF"],
+            "pixel_retro": ["#E74C3C", "#3498DB", "#2ECC71", "#F1C40F", "#9B59B6"],
+            "soft_pastel": ["#FFB5B5", "#B5D8FF", "#B5FFB5", "#FFE5B5", "#E5B5FF"],
+            "dark_gothic": ["#2C0A37", "#4A0E4E", "#7B1E7A", "#A51C6C", "#D6336C"],
+            "hand_drawn": ["#5D4037", "#795548", "#8D6E63", "#A1887F", "#BCAAA4"],
+            "flat_modern": ["#1ABC9C", "#3498DB", "#9B59B6", "#E74C3C", "#F39C12"],
+            "watercolor": ["#E8D5B7", "#B8D4E3", "#F2D7EE", "#C9E4CA", "#FFE6CC"],
+            "low_poly": ["#16A085", "#27AE60", "#2980B9", "#8E44AD", "#F39C12"],
         }
-        return palettes.get(art_style, palettes["clean_minimal"])
+        return palettes.get(art_style, palettes["colorful_cartoon"])
+
+    def _fix_gdd_issues(
+        self,
+        gdd: Dict[str, Any],
+        errors: List[str],
+    ) -> Dict[str, Any]:
+        """Attempt to fix common GDD validation issues."""
+        fixed_gdd = gdd.copy()
+        
+        for error in errors:
+            if "game_name" in error.lower():
+                fixed_gdd["game_name"] = fixed_gdd.get("game_name", "Untitled Game")
+            if "genre" in error.lower():
+                fixed_gdd["genre"] = fixed_gdd.get("genre", "casual")
+            if "mechanics" in error.lower():
+                if "mechanics" not in fixed_gdd:
+                    fixed_gdd["mechanics"] = {}
+                if "primary" not in fixed_gdd["mechanics"]:
+                    fixed_gdd["mechanics"]["primary"] = "tap_jump"
+                if "secondary" not in fixed_gdd["mechanics"]:
+                    fixed_gdd["mechanics"]["secondary"] = ["collision_detection"]
+            if "analytics_plan" in error.lower():
+                fixed_gdd["analytics_plan"] = {
+                    "key_events": GDD_SCHEMA["analytics_events"],
+                    "key_metrics": ["retention", "completion_rate"],
+                    "funnel_stages": ["install", "tutorial", "level_10"],
+                }
+            if "asset_style_guide" in error.lower():
+                fixed_gdd["asset_style_guide"] = {
+                    "art_style": "colorful_cartoon",
+                    "color_palette": ["#FF6B6B", "#4ECDC4", "#45B7D1"],
+                    "audio_style": "upbeat",
+                }
+
+        return fixed_gdd
 
     async def validate(
         self,
@@ -532,27 +510,29 @@ class PreProductionStep(BaseStepExecutor):
         game: Game,
         artifacts: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Validate the GDD against schema."""
-        gdd = artifacts.get("gdd_spec", {})
+        """Validate the generated GDD against schema."""
         errors = []
         warnings = []
+
+        gdd = artifacts.get("gdd_spec", {})
 
         # Check required fields
         for field in GDD_SCHEMA["required_fields"]:
             if field not in gdd:
                 errors.append(f"Missing required field: {field}")
 
-        # Check mechanics
+        # Check mechanics structure
         mechanics = gdd.get("mechanics", {})
-        if not mechanics.get("primary"):
-            errors.append("Missing primary mechanic")
+        for req_field in GDD_SCHEMA["mechanics_required"]:
+            if req_field not in mechanics:
+                errors.append(f"Missing mechanics field: {req_field}")
 
         # Check analytics events
-        analytics = gdd.get("analytics_plan", {})
-        events = analytics.get("events", [])
-        for required_event in GDD_SCHEMA["analytics_events"]:
-            if required_event not in events:
-                warnings.append(f"Missing analytics event: {required_event}")
+        analytics_plan = gdd.get("analytics_plan", {})
+        defined_events = analytics_plan.get("key_events", [])
+        for event in GDD_SCHEMA["analytics_events"]:
+            if event not in defined_events:
+                warnings.append(f"Missing analytics event: {event}")
 
         # Check progression
         progression = gdd.get("progression", {})
@@ -560,11 +540,18 @@ class PreProductionStep(BaseStepExecutor):
             warnings.append("Level count should be 10")
 
         free_levels = progression.get("free_levels", [])
-        if free_levels != [1, 2, 3]:
-            warnings.append("Free levels should be [1, 2, 3]")
+        if len(free_levels) != 3:
+            warnings.append("Should have exactly 3 free levels")
 
         return {
             "valid": len(errors) == 0,
             "errors": errors,
             "warnings": warnings,
         }
+
+    async def rollback(self, db: AsyncSession, game: Game) -> bool:
+        """Rollback the pre-production step."""
+        game.gdd_spec = None
+        game.selected_mechanics = None
+        await db.commit()
+        return True

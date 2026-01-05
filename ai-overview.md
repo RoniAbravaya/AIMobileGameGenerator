@@ -134,6 +134,37 @@ See `docs/SIMILARITY_CHECK.md` for complete documentation.
 - Aggregate daily metrics
 - Calculate game scores for ranking
 
+### AIService (`backend/app/services/ai_service.py`) ✅ NEW
+- OpenAI and Anthropic API integration
+- GDD generation with structured JSON output
+- Dart/Flutter code generation
+- Level configuration generation
+- Asset prompt generation for DALL-E
+- Automatic fallback between providers
+
+### GitHubService (`backend/app/services/github_service.py`) ✅ NEW
+- Full repository creation via GitHub API
+- Template cloning with subpath extraction
+- Multi-file commits via Git Data API
+- GitHub Actions workflow setup
+- Release and asset management
+- Workflow triggering for builds
+
+### TemplateService (`backend/app/services/template_service.py`) ✅ NEW
+- Clone official Flame templates from GitHub
+- Create Flutter project structure
+- Inject GameFactory architecture (services, overlays, screens)
+- Generate Dart code for game components, scenes, models
+- Pubspec.yaml and configuration file generation
+
+### AssetService (`backend/app/services/asset_service.py`) ✅ NEW
+- AI image generation via DALL-E 3
+- Sprite, background, UI, and icon generation
+- Placeholder audio file creation
+- Texture atlas generation
+- Mobile optimization (image compression)
+- Asset metadata tracking in database
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
@@ -215,11 +246,41 @@ docker-compose exec backend python -m app.db.seed
 - API rate limiting on event ingestion
 - JWT authentication (to be implemented)
 
+## Implemented Step Executors
+
+| Step | Name | Status | Description |
+|------|------|--------|-------------|
+| 1 | Pre-Production | ✅ Full | AI-powered GDD generation with similarity checking |
+| 2 | Project Setup | ✅ Full | Real GitHub repo creation, template cloning |
+| 3 | Architecture | ✅ Full | AI code generation, GitHub commits |
+| 4-6 | Analytics & Prototype | ⏳ Stubbed | Pending implementation |
+| 7 | Asset Generation | ✅ Full | DALL-E sprites, texture atlases, audio placeholders |
+| 8-12 | Remaining Steps | ⏳ Stubbed | Pending implementation |
+
+## Required Environment Variables
+
+```bash
+# AI Services (at least one required)
+OPENAI_API_KEY=sk-...        # For GDD/code generation and DALL-E
+ANTHROPIC_API_KEY=sk-ant-... # Alternative AI provider
+
+# GitHub (required for repo creation)
+GITHUB_TOKEN=ghp_...         # Personal Access Token with repo scope
+GITHUB_ORG=your-org          # Organization or username
+
+# Database & Redis
+DATABASE_URL=postgresql+asyncpg://...
+REDIS_URL=redis://...
+```
+
 ## Future Enhancements
 
-- [ ] Full Flutter code generation for Steps 4-12
-- [ ] Real GitHub integration (currently simulated)
-- [ ] AI asset generation pipeline
+- [x] ~~Full Flutter code generation for Steps 1-3~~ ✅ Implemented
+- [x] ~~Real GitHub integration~~ ✅ Implemented  
+- [x] ~~AI asset generation pipeline~~ ✅ Implemented
+- [ ] Steps 4-6: Analytics design, implementation, core prototype
+- [ ] Steps 8-12: Vertical slice through post-launch
 - [ ] iOS support
 - [ ] Cloud sync for unlock state
 - [ ] A/B testing framework
+- [ ] Real audio generation (ElevenLabs/similar)

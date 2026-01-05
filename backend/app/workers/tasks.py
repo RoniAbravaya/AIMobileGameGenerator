@@ -210,11 +210,26 @@ def generate_assets(game_id: str, asset_type: str, spec: dict):
 
     async def _generate():
         from app.db.session import async_session
-        from app.workers.step_executors.asset_generation import AssetGenerationStep
+        from app.services.asset_service import get_asset_service
+        from app.services.game_service import GameService
 
         async with async_session() as db:
-            executor = AssetGenerationStep()
-            result = await executor.generate_single_asset(db, game_id, asset_type, spec)
+            game_service = GameService(db)
+            game_uuid = uuid_module.UUID(game_id)
+            game = await game_service.get_game(game_uuid)
+            
+            if not game or not game.gdd_spec:
+                return {"success": False, "error": "Game or GDD not found"}
+            
+            asset_service = get_asset_service()
+            result = await asset_service.generate_asset(
+                game_id=game_id,
+                asset_type=asset_type,
+                asset_name=spec.get("name", asset_type),
+                description=spec.get("description", ""),
+                style_guide=game.gdd_spec.get("asset_style_guide", {}),
+                output_path=asset_service.storage_path / game_id,
+            )
             return result
 
     return run_async(_generate())
@@ -279,9 +294,12 @@ def build_game(game_id: str, build_type: str = "debug"):
     async def _build():
         from app.db.session import async_session
         from app.services.game_service import GameService
+        from app.services.github_service import get_github_service
+        from app.models.build import GameBuild
 
         async with async_session() as db:
             game_service = GameService(db)
+            github_service = get_github_service()
             
             # Convert string to UUID
             game_uuid = uuid_module.UUID(game_id)
@@ -294,20 +312,39 @@ def build_game(game_id: str, build_type: str = "debug"):
                 )
                 return {"success": False, "error": "No game or repo found"}
 
-            # TODO: Implement GitHubService for workflow triggering
-            # For now, log and return placeholder
+            # Trigger GitHub Actions workflow
+            workflow_result = await github_service.trigger_workflow(
+                repo_name=game.github_repo,
+                workflow_id="build.yml",
+                ref="main",
+                inputs={"build_type": build_type},
+            )
+
+            # Create build record
+            build = GameBuild(
+                game_id=game.id,
+                build_type=build_type,
+                status="pending" if workflow_result["success"] else "failed",
+                github_workflow_run_id=workflow_result.get("run_id"),
+                github_workflow_url=workflow_result.get("url"),
+            )
+            db.add(build)
+            await db.commit()
+
             logger.info(
-                "build_would_trigger",
+                "build_triggered",
                 game_id=game_id,
                 repo=game.github_repo,
                 build_type=build_type,
+                success=workflow_result["success"],
             )
             
             return {
-                "success": True,
-                "message": "Build trigger placeholder - GitHubService not yet implemented",
+                "success": workflow_result["success"],
+                "build_id": str(build.id),
                 "repo": game.github_repo,
                 "build_type": build_type,
+                "workflow_triggered": workflow_result["success"],
             }
 
     return run_async(_build())
