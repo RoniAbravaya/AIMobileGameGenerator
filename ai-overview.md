@@ -253,9 +253,15 @@ docker-compose exec backend python -m app.db.seed
 | 1 | Pre-Production | ✅ Full | AI-powered GDD generation with similarity checking |
 | 2 | Project Setup | ✅ Full | Real GitHub repo creation, template cloning |
 | 3 | Architecture | ✅ Full | AI code generation, GitHub commits |
-| 4-6 | Analytics & Prototype | ⏳ Stubbed | Pending implementation |
+| 4 | Analytics Design | ✅ Full | Event specification, funnels, documentation |
+| 5 | Analytics Impl | ✅ Full | Firebase/backend service implementation |
+| 6 | Core Prototype | ✅ Full | Main gameplay loop, player, obstacles, collectibles |
 | 7 | Asset Generation | ✅ Full | DALL-E sprites, texture atlases, audio placeholders |
-| 8-12 | Remaining Steps | ⏳ Stubbed | Pending implementation |
+| 8 | Vertical Slice | ✅ Full | Polished UI, screens, overlays, audio service |
+| 9 | Content Production | ✅ Full | 10 level configs, ad-gating, level select |
+| 10 | Testing | ✅ Full | Unit tests, integration tests, QA checklist |
+| 11 | Release Prep | ✅ Full | ProGuard, signing, store metadata, privacy policy |
+| 12 | Post-Launch | ✅ Full | Analytics aggregation, scoring, learning weights |
 
 ## Required Environment Variables
 
@@ -278,9 +284,12 @@ REDIS_URL=redis://...
 - [x] ~~Full Flutter code generation for Steps 1-3~~ ✅ Implemented
 - [x] ~~Real GitHub integration~~ ✅ Implemented  
 - [x] ~~AI asset generation pipeline~~ ✅ Implemented
-- [ ] Steps 4-6: Analytics design, implementation, core prototype
-- [ ] Steps 8-12: Vertical slice through post-launch
-- [ ] iOS support
+- [x] ~~Steps 4-6: Analytics design, implementation, core prototype~~ ✅ Implemented
+- [x] ~~Steps 8-12: Vertical slice through post-launch~~ ✅ Implemented
+- [ ] iOS support (currently Android-only)
 - [ ] Cloud sync for unlock state
 - [ ] A/B testing framework
 - [ ] Real audio generation (ElevenLabs/similar)
+- [ ] Multi-language game support
+- [ ] Advanced difficulty balancing with ML
+- [ ] Automated Play Store publishing
