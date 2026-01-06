@@ -12,6 +12,11 @@ Generates the Game Design Document (GDD-lite) for each game using AI:
 - Analytics plan
 - Asset style guide
 
+IMPORTANT: This step REQUIRES AI for GDD generation. The system will:
+1. Validate AI service availability before starting
+2. Use retry mechanism for transient API failures
+3. Only fall back to templates if AI_ALLOW_TEMPLATE_FALLBACK=true (dev only)
+
 IMPORTANT: Includes SIMILARITY CHECK after generation.
 If the generated game is >80% similar to any existing game,
 the step will regenerate with different constraints until unique.
@@ -22,9 +27,14 @@ from typing import Any, Dict, List, Optional
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.game import Game
 from app.models.similarity import RegenerationLog, SimilarityCheck
-from app.services.ai_service import get_ai_service
+from app.services.ai_service import (
+    AIGenerationError,
+    AIServiceNotConfiguredError,
+    get_ai_service,
+)
 from app.services.mechanic_service import MechanicService
 from app.services.similarity_service import (
     MAX_REGENERATION_ATTEMPTS,
@@ -83,8 +93,11 @@ class PreProductionStep(BaseStepExecutor):
     """
     Step 1: Generate GDD-lite for the game using AI.
     
-    Uses OpenAI/Claude to generate comprehensive game design documents.
-    Includes similarity checking to ensure diversity.
+    IMPORTANT: This step REQUIRES AI (Claude or OpenAI) for GDD generation.
+    Template fallback is only available if AI_ALLOW_TEMPLATE_FALLBACK=true.
+    
+    Uses Claude (primary) or OpenAI (fallback) to generate comprehensive
+    game design documents. Includes similarity checking to ensure diversity.
     Will regenerate up to MAX_REGENERATION_ATTEMPTS times if too similar.
     """
 
@@ -101,9 +114,27 @@ class PreProductionStep(BaseStepExecutor):
 
         logs = []
         logs.append(f"Starting pre-production for {game.name}")
-        logs.append(f"Using AI service for GDD generation")
+        
+        # Log AI provider info
+        ai_info = self.ai_service.get_provider_info()
+        logs.append(f"AI Provider: Claude={ai_info['claude_configured']}, OpenAI={ai_info['openai_configured']}")
+        logs.append(f"AI Required: {ai_info['ai_required']}, Template Fallback Allowed: {ai_info['fallback_allowed']}")
         logs.append(f"Similarity threshold: {SIMILARITY_THRESHOLD * 100}%")
         logs.append(f"Max regeneration attempts: {MAX_REGENERATION_ATTEMPTS}")
+        
+        # Validate AI availability upfront (fail fast if required but not configured)
+        try:
+            self.ai_service.validate_availability()
+            logs.append("✓ AI service validated and ready")
+        except AIServiceNotConfiguredError as e:
+            logs.append(f"✗ AI service not configured: {str(e)}")
+            return {
+                "success": False,
+                "artifacts": {},
+                "validation": {"valid": False, "errors": [str(e)]},
+                "error": str(e),
+                "logs": "\n".join(logs),
+            }
 
         attempt = 1
         excluded_mechanics: List[str] = []
@@ -141,7 +172,7 @@ class PreProductionStep(BaseStepExecutor):
                 mechanic_names = [m.name for m in mechanics] if mechanics else ["tap_jump", "collision_detection"]
                 logs.append(f"Selected mechanics: {mechanic_names}")
 
-                # Generate GDD using AI service
+                # Generate GDD using AI service (REQUIRED)
                 logs.append("Calling AI service for GDD generation...")
                 try:
                     gdd_spec = await self.ai_service.generate_gdd(
@@ -152,15 +183,72 @@ class PreProductionStep(BaseStepExecutor):
                         excluded_styles=excluded_styles,
                         attempt_number=attempt,
                     )
-                    logs.append("GDD generated successfully via AI")
+                    logs.append(f"✓ GDD generated successfully via AI (provider: {gdd_spec.get('_ai_provider', 'unknown')})")
+                except AIServiceNotConfiguredError as config_error:
+                    # AI is required but not configured - check if fallback allowed
+                    if settings.ai_allow_template_fallback:
+                        logs.append(f"⚠ AI not configured, using template fallback (dev mode): {str(config_error)}")
+                        gdd_spec = self._generate_fallback_gdd(
+                            game,
+                            mechanic_names,
+                            attempt,
+                            excluded_styles,
+                        )
+                        gdd_spec["_generated_by"] = "template_fallback"
+                        gdd_spec["_fallback_reason"] = str(config_error)
+                    else:
+                        # Fail - AI is required
+                        logs.append(f"✗ AI REQUIRED but not configured: {str(config_error)}")
+                        return {
+                            "success": False,
+                            "artifacts": {},
+                            "validation": {"valid": False, "errors": [str(config_error)]},
+                            "error": f"AI service required for GDD generation: {str(config_error)}",
+                            "logs": "\n".join(logs),
+                        }
+                except AIGenerationError as gen_error:
+                    # AI is configured but generation failed after retries
+                    if settings.ai_allow_template_fallback:
+                        logs.append(f"⚠ AI generation failed after retries, using template fallback: {str(gen_error)}")
+                        gdd_spec = self._generate_fallback_gdd(
+                            game,
+                            mechanic_names,
+                            attempt,
+                            excluded_styles,
+                        )
+                        gdd_spec["_generated_by"] = "template_fallback"
+                        gdd_spec["_fallback_reason"] = str(gen_error)
+                    else:
+                        # Fail - AI generation failed and fallback not allowed
+                        logs.append(f"✗ AI generation failed: {str(gen_error)}")
+                        return {
+                            "success": False,
+                            "artifacts": {},
+                            "validation": {"valid": False, "errors": [str(gen_error)]},
+                            "error": f"AI generation failed: {str(gen_error)}",
+                            "logs": "\n".join(logs),
+                        }
                 except Exception as ai_error:
-                    logs.append(f"AI generation failed: {str(ai_error)}, using fallback template")
-                    gdd_spec = self._generate_fallback_gdd(
-                        game,
-                        mechanic_names,
-                        attempt,
-                        excluded_styles,
-                    )
+                    # Unexpected error - apply same fallback logic
+                    if settings.ai_allow_template_fallback:
+                        logs.append(f"⚠ Unexpected AI error, using template fallback: {str(ai_error)}")
+                        gdd_spec = self._generate_fallback_gdd(
+                            game,
+                            mechanic_names,
+                            attempt,
+                            excluded_styles,
+                        )
+                        gdd_spec["_generated_by"] = "template_fallback"
+                        gdd_spec["_fallback_reason"] = str(ai_error)
+                    else:
+                        logs.append(f"✗ Unexpected AI error: {str(ai_error)}")
+                        return {
+                            "success": False,
+                            "artifacts": {},
+                            "validation": {"valid": False, "errors": [str(ai_error)]},
+                            "error": f"AI generation error: {str(ai_error)}",
+                            "logs": "\n".join(logs),
+                        }
 
                 # Validate GDD structure
                 validation = await self.validate(db, game, {"gdd_spec": gdd_spec})
@@ -346,7 +434,17 @@ class PreProductionStep(BaseStepExecutor):
         """
         Generate a fallback GDD when AI service is unavailable.
         Uses template-based generation with variation.
+        
+        WARNING: This should only be used for development/testing.
+        Production systems should ALWAYS use AI-generated GDDs.
+        Enable with AI_ALLOW_TEMPLATE_FALLBACK=true environment variable.
         """
+        self.logger.warning(
+            "using_template_fallback_gdd",
+            game_id=str(game.id),
+            reason="AI unavailable or failed",
+            warning="Template fallback should only be used for development",
+        )
         genre = game.genre.lower()
 
         # Get available art styles (excluding used ones)

@@ -10,8 +10,13 @@ Handles:
 - Level configuration
 - Asset prompt generation
 - Code quality analysis
+
+IMPORTANT: AI generation is REQUIRED for game creation. The system will fail
+if no AI provider is configured, unless ai_allow_template_fallback is enabled
+(for development/testing only).
 """
 
+import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
@@ -22,6 +27,16 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 
 logger = structlog.get_logger()
+
+
+class AIServiceNotConfiguredError(Exception):
+    """Raised when AI service is required but no API keys are configured."""
+    pass
+
+
+class AIGenerationError(Exception):
+    """Raised when AI generation fails after all retries."""
+    pass
 
 
 # Claude model options
@@ -62,10 +77,50 @@ class AIService:
             logger.info("openai_client_initialized_as_fallback")
 
         if not self.anthropic_client and not self.openai_client:
+            if settings.ai_generation_required and not settings.ai_allow_template_fallback:
+                logger.error(
+                    "no_ai_clients_available_required",
+                    message="AI is REQUIRED. Set ANTHROPIC_API_KEY (primary) or OPENAI_API_KEY (fallback)"
+                )
+            else:
+                logger.warning(
+                    "no_ai_clients_available", 
+                    message="Set ANTHROPIC_API_KEY (primary) or OPENAI_API_KEY (fallback)"
+                )
+
+    def is_available(self) -> bool:
+        """Check if at least one AI provider is available."""
+        return self.anthropic_client is not None or self.openai_client is not None
+
+    def validate_availability(self) -> None:
+        """
+        Validate that AI service is available when required.
+        
+        Raises:
+            AIServiceNotConfiguredError: If AI is required but not configured
+        """
+        if not self.is_available():
+            if settings.ai_generation_required and not settings.ai_allow_template_fallback:
+                raise AIServiceNotConfiguredError(
+                    "AI service is required but no API keys are configured. "
+                    "Set ANTHROPIC_API_KEY (recommended) or OPENAI_API_KEY. "
+                    "To allow template fallback for testing, set AI_ALLOW_TEMPLATE_FALLBACK=true"
+                )
             logger.warning(
-                "no_ai_clients_available", 
-                message="Set ANTHROPIC_API_KEY (primary) or OPENAI_API_KEY (fallback)"
+                "ai_service_not_configured",
+                allow_fallback=settings.ai_allow_template_fallback
             )
+
+    def get_provider_info(self) -> Dict[str, Any]:
+        """Get information about configured AI providers."""
+        return {
+            "claude_configured": self.anthropic_client is not None,
+            "openai_configured": self.openai_client is not None,
+            "primary_model": self.primary_model,
+            "ai_required": settings.ai_generation_required,
+            "fallback_allowed": settings.ai_allow_template_fallback,
+            "max_retries": settings.ai_generation_retries,
+        }
 
     def set_model(self, model_name: str):
         """
@@ -181,7 +236,61 @@ class AIService:
             logger.info("using_openai_no_claude_configured")
             return await self._call_openai(system_prompt, user_prompt, **kwargs)
         
-        raise ValueError("No AI client available. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.")
+        raise AIServiceNotConfiguredError(
+            "No AI client available. Set ANTHROPIC_API_KEY or OPENAI_API_KEY."
+        )
+
+    async def _call_ai_with_retry(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_retries: Optional[int] = None,
+        retry_delay: float = 1.0,
+        **kwargs,
+    ) -> str:
+        """
+        Call AI with automatic retry on transient failures.
+        
+        Args:
+            system_prompt: System instructions
+            user_prompt: User request
+            max_retries: Maximum retry attempts (default from settings)
+            retry_delay: Base delay between retries (exponential backoff)
+            **kwargs: Additional arguments for _call_ai
+        
+        Returns:
+            AI response string
+            
+        Raises:
+            AIGenerationError: After all retries exhausted
+        """
+        if max_retries is None:
+            max_retries = settings.ai_generation_retries
+        
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                return await self._call_ai(system_prompt, user_prompt, **kwargs)
+            except AIServiceNotConfiguredError:
+                # Don't retry configuration errors
+                raise
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    "ai_call_retry",
+                    attempt=attempt + 1,
+                    max_retries=max_retries,
+                    error=str(e),
+                )
+                if attempt < max_retries - 1:
+                    # Exponential backoff
+                    delay = retry_delay * (2 ** attempt)
+                    await asyncio.sleep(delay)
+        
+        raise AIGenerationError(
+            f"AI generation failed after {max_retries} attempts. Last error: {last_error}"
+        )
 
     async def generate_gdd(
         self,
@@ -193,9 +302,10 @@ class AIService:
         attempt_number: int = 1,
     ) -> Dict[str, Any]:
         """
-        Generate a Game Design Document (GDD-lite) for a mobile game.
+        Generate a Game Design Document (GDD-lite) for a mobile game using AI.
         
         Uses Claude's structured output capabilities for reliable JSON generation.
+        This method REQUIRES AI and will not use template fallback.
         
         Args:
             game_name: Name of the game
@@ -207,7 +317,14 @@ class AIService:
         
         Returns:
             Complete GDD specification as a dictionary
+            
+        Raises:
+            AIServiceNotConfiguredError: If no AI provider is available
+            AIGenerationError: If AI generation fails after retries
         """
+        # Validate AI availability - GDD generation REQUIRES AI
+        self.validate_availability()
+        
         excluded_styles = excluded_styles or []
         constraints = constraints or {}
 
@@ -303,17 +420,19 @@ Return a JSON object with EXACTLY this structure:
 }}"""
 
         logger.info(
-            "generating_gdd_with_claude",
+            "generating_gdd_with_ai",
             game_name=game_name,
             genre=genre,
             mechanics=mechanics,
             attempt=attempt_number,
+            provider="claude" if self.anthropic_client else "openai",
         )
 
         # Use slightly higher temperature for more creative variation on retries
         temperature = min(0.9, 0.6 + (attempt_number * 0.1))
 
-        response = await self._call_ai(
+        # Use retry mechanism for robust AI generation
+        response = await self._call_ai_with_retry(
             system_prompt,
             user_prompt,
             temperature=temperature,
@@ -331,11 +450,18 @@ Return a JSON object with EXACTLY this structure:
                 response = response.strip()
             
             gdd = json.loads(response)
-            logger.info("gdd_generated_successfully", game_name=game_name)
+            # Mark that this was AI-generated (not template fallback)
+            gdd["_generated_by"] = "ai"
+            gdd["_ai_provider"] = "claude" if self.anthropic_client else "openai"
+            logger.info(
+                "gdd_generated_successfully_by_ai",
+                game_name=game_name,
+                provider=gdd["_ai_provider"],
+            )
             return gdd
         except json.JSONDecodeError as e:
             logger.error("gdd_json_parse_error", error=str(e), response=response[:500])
-            raise ValueError(f"Failed to parse GDD JSON: {e}")
+            raise AIGenerationError(f"Failed to parse AI-generated GDD JSON: {e}")
 
     async def generate_dart_code(
         self,
