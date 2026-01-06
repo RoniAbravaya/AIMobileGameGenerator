@@ -7,7 +7,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { api, LogEntry } from '@/lib/api'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
@@ -100,6 +100,18 @@ export default function GameDetailPage() {
       if (status === 'in_progress' || status === 'generating') return 3000
       return false
     },
+  })
+
+  // Fetch logs for this game
+  const { data: logs } = useQuery<LogEntry[]>({
+    queryKey: ['game-logs', gameId],
+    queryFn: () => api.getGameLogs(gameId, 200),
+    refetchInterval: (query) => {
+      // Auto-refresh logs while game is in progress
+      if (game?.status === 'in_progress' || game?.status === 'generating') return 2000
+      return false
+    },
+    enabled: !!game,
   })
 
   const toggleStep = (stepNumber: number) => {
@@ -351,6 +363,69 @@ export default function GameDetailPage() {
               </div>
             )
           })}
+        </div>
+      </div>
+
+      {/* Live Logs */}
+      <div className="bg-gray-900 rounded-lg shadow-sm border border-gray-700">
+        <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Live Logs</h2>
+            <p className="text-sm text-gray-400">
+              {game.status === 'in_progress' || game.status === 'generating' 
+                ? '🔴 Auto-refreshing every 2 seconds...' 
+                : 'Generation complete'}
+            </p>
+          </div>
+          <span className="text-sm text-gray-500">{logs?.length || 0} entries</span>
+        </div>
+        
+        <div className="p-4 max-h-96 overflow-y-auto font-mono text-sm">
+          {!logs || logs.length === 0 ? (
+            <div className="text-gray-500 text-center py-8">
+              <p>No logs yet.</p>
+              <p className="text-xs mt-2">Logs will appear here when the game generation starts.</p>
+              <p className="text-xs text-yellow-500 mt-4">
+                💡 Make sure the batch has been started and Celery worker is running.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {logs.map((log) => (
+                <div 
+                  key={log.id} 
+                  className={clsx(
+                    'py-1 px-2 rounded',
+                    log.log_level === 'error' && 'bg-red-900/30 text-red-300',
+                    log.log_level === 'warning' && 'bg-yellow-900/30 text-yellow-300',
+                    log.log_level === 'info' && 'text-green-300',
+                    log.log_level === 'debug' && 'text-gray-400',
+                  )}
+                >
+                  <span className="text-gray-500">
+                    {new Date(log.created_at).toLocaleTimeString()}
+                  </span>
+                  {' '}
+                  <span className={clsx(
+                    'font-bold',
+                    log.log_level === 'error' && 'text-red-400',
+                    log.log_level === 'warning' && 'text-yellow-400',
+                    log.log_level === 'info' && 'text-blue-400',
+                    log.log_level === 'debug' && 'text-gray-500',
+                  )}>
+                    [{log.log_level.toUpperCase()}]
+                  </span>
+                  {' '}
+                  <span className="text-purple-400">[{log.log_type}]</span>
+                  {log.step_number !== null && log.step_number !== undefined && (
+                    <span className="text-cyan-400"> [Step {log.step_number}]</span>
+                  )}
+                  {' '}
+                  <span className="text-gray-200">{log.message}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

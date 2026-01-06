@@ -186,6 +186,30 @@ export const api = {
   },
 
   // ==================
+  // Logs
+  // ==================
+
+  /**
+   * Get logs for a game
+   */
+  async getGameLogs(gameId: string, limit: number = 100): Promise<LogEntry[]> {
+    const response = await client.get(`/logs/games/${gameId}`, {
+      params: { limit },
+    })
+    return response.data
+  },
+
+  /**
+   * Get logs for a batch
+   */
+  async getBatchLogs(batchId: string, limit: number = 100): Promise<LogEntry[]> {
+    const response = await client.get(`/logs/batches/${batchId}`, {
+      params: { limit },
+    })
+    return response.data
+  },
+
+  // ==================
   // Health
   // ==================
 
@@ -196,6 +220,19 @@ export const api = {
     const response = await axios.get(`${API_URL}/health`)
     return response.data
   },
+}
+
+// Log entry type
+export interface LogEntry {
+  id: string
+  batch_id?: string
+  game_id?: string
+  step_number?: number
+  log_level: string
+  log_type: string
+  message: string
+  metadata?: Record<string, unknown>
+  created_at: string
 }
 
 export default api

@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import batches, events, games, mechanics, metrics, similarity
+from app.api.v1 import batches, events, games, logs, mechanics, metrics, similarity
 
 api_router = APIRouter()
 
@@ -12,3 +12,4 @@ api_router.include_router(mechanics.router, prefix="/mechanics", tags=["mechanic
 api_router.include_router(events.router, prefix="/events", tags=["events"])
 api_router.include_router(metrics.router, prefix="/metrics", tags=["metrics"])
 api_router.include_router(similarity.router, prefix="/similarity", tags=["similarity"])
+api_router.include_router(logs.router, prefix="/logs", tags=["logs"])

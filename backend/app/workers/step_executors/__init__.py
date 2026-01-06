@@ -39,6 +39,22 @@ STEP_EXECUTORS = {
     12: PostLaunchStep,         # Analytics aggregation and learning loop
 }
 
+# Human-readable step names
+STEP_NAMES = {
+    1: "Pre-Production (GDD)",
+    2: "Project Setup",
+    3: "Architecture",
+    4: "Analytics Design",
+    5: "Analytics Implementation",
+    6: "Core Prototype",
+    7: "Asset Generation",
+    8: "Vertical Slice",
+    9: "Content Production",
+    10: "Testing",
+    11: "Release Prep",
+    12: "Post-Launch",
+}
+
 
 def get_step_executor(step_number: int) -> Optional[BaseStepExecutor]:
     """Get the executor for a step number."""
@@ -64,4 +80,5 @@ __all__ = [
     "PostLaunchStep",
     "get_step_executor",
     "STEP_EXECUTORS",
+    "STEP_NAMES",
 ]

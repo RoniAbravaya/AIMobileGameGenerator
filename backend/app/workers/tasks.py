@@ -131,27 +131,52 @@ def execute_step(self, game_id: str, step_number: int):
 
     async def _execute():
         from app.services.game_service import GameService
-        from app.workers.step_executors import get_step_executor
+        from app.services.logging_service import LoggingService
+        from app.workers.step_executors import get_step_executor, STEP_NAMES
 
         session_factory, engine = get_task_session()
         trigger_next_step = False
         
         try:
             async with session_factory() as db:
+                log_service = LoggingService(db)
+                game_uuid = uuid_module.UUID(game_id)
+                step_name = STEP_NAMES.get(step_number, f"Step {step_number}")
+                
                 try:
                     game_service = GameService(db)
-                    
-                    # Convert string to UUID
-                    game_uuid = uuid_module.UUID(game_id)
                     game = await game_service.get_game(game_uuid)
 
                     if not game:
                         logger.error("game_not_found", game_id=game_id)
+                        await log_service.error(
+                            "game_not_found",
+                            f"Game {game_id} not found",
+                            game_id=game_uuid,
+                            step_number=step_number,
+                        )
+                        await db.commit()
                         return
 
                     if game.status == "cancelled":
                         logger.info("game_cancelled_skipping", game_id=game_id)
+                        await log_service.warning(
+                            "game_cancelled",
+                            "Game was cancelled, skipping",
+                            game_id=game_uuid,
+                            batch_id=game.batch_id,
+                            step_number=step_number,
+                        )
+                        await db.commit()
                         return
+
+                    # Log step start
+                    await log_service.step_start(
+                        game_id=game_uuid,
+                        step_number=step_number,
+                        step_name=step_name,
+                        batch_id=game.batch_id,
+                    )
 
                     # Get step and mark as running
                     step = await game_service.get_step(game_uuid, step_number)
@@ -161,6 +186,14 @@ def execute_step(self, game_id: str, step_number: int):
                             game_id=game_id,
                             step_number=step_number,
                         )
+                        await log_service.error(
+                            "step_not_found",
+                            f"Step {step_number} record not found",
+                            game_id=game_uuid,
+                            batch_id=game.batch_id,
+                            step_number=step_number,
+                        )
+                        await db.commit()
                         return
 
                     await game_service.update_step_status(
@@ -168,21 +201,52 @@ def execute_step(self, game_id: str, step_number: int):
                         step_number,
                         status="running",
                     )
+                    
+                    await log_service.info(
+                        "step_running",
+                        f"Step {step_number} ({step_name}) is now running",
+                        game_id=game_uuid,
+                        batch_id=game.batch_id,
+                        step_number=step_number,
+                    )
 
                     # Get and execute the step
                     executor = get_step_executor(step_number)
                     if not executor:
+                        await log_service.error(
+                            "no_executor",
+                            f"No executor found for step {step_number}",
+                            game_id=game_uuid,
+                            batch_id=game.batch_id,
+                            step_number=step_number,
+                        )
                         await game_service.update_step_status(
                             game_uuid,
                             step_number,
                             status="failed",
                             error_message=f"No executor for step {step_number}",
                         )
+                        await db.commit()
                         return
 
+                    await log_service.info(
+                        "executor_starting",
+                        f"Executing step {step_number}: {step_name}...",
+                        game_id=game_uuid,
+                        batch_id=game.batch_id,
+                        step_number=step_number,
+                    )
+                    
                     result = await executor.execute(db, game)
 
                     if result["success"]:
+                        await log_service.step_complete(
+                            game_id=game_uuid,
+                            step_number=step_number,
+                            step_name=step_name,
+                            batch_id=game.batch_id,
+                        )
+                        
                         await game_service.update_step_status(
                             game_uuid,
                             step_number,
@@ -194,14 +258,36 @@ def execute_step(self, game_id: str, step_number: int):
 
                         # Flag to trigger next step after session closes
                         if step_number < 12:
+                            await log_service.info(
+                                "next_step_queued",
+                                f"Queuing step {step_number + 1}",
+                                game_id=game_uuid,
+                                batch_id=game.batch_id,
+                                step_number=step_number,
+                            )
                             trigger_next_step = True
                         else:
+                            await log_service.info(
+                                "game_complete",
+                                "🎉 Game generation completed successfully!",
+                                game_id=game_uuid,
+                                batch_id=game.batch_id,
+                                step_number=step_number,
+                            )
                             logger.info(
                                 "game_generation_complete",
                                 game_id=game_id,
                             )
                     else:
                         error_msg = result.get("error", "Unknown error")
+                        await log_service.step_failed(
+                            game_id=game_uuid,
+                            step_number=step_number,
+                            step_name=step_name,
+                            error_message=error_msg,
+                            batch_id=game.batch_id,
+                        )
+                        
                         await game_service.update_step_status(
                             game_uuid,
                             step_number,
