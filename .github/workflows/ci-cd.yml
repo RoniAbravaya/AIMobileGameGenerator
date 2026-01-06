@@ -214,55 +214,7 @@ jobs:
             NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'https://api.gamefactory.example.com' }}
 
   # ====================
-  # Deploy to Railway
-  # ====================
-  deploy-railway:
-    name: Deploy to Railway
-    runs-on: ubuntu-latest
-    needs: build-images
-    # Only run if RAILWAY_TOKEN secret is set
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ENABLE_RAILWAY_DEPLOY == 'true'
-    
-    environment:
-      name: production
-      url: ${{ steps.deploy.outputs.url }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy to Railway
-        id: deploy
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          if [ -z "$RAILWAY_TOKEN" ]; then
-            echo "⚠️ RAILWAY_TOKEN not set, skipping deployment"
-            exit 0
-          fi
-          
-          # Deploy using Railway CLI
-          railway up --detach
-          
-          # Get the deployment URL (if available)
-          echo "url=$(railway status --json | jq -r '.deploymentUrl // empty')" >> $GITHUB_OUTPUT
-
-      - name: Deployment Summary
-        run: |
-          echo "## 🚀 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Docker Images:" >> $GITHUB_STEP_SUMMARY
-          echo "- Backend: \`${{ env.BACKEND_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Frontend: \`${{ env.FRONTEND_IMAGE }}:latest\`" >> $GITHUB_STEP_SUMMARY
-  
-  # ====================
-  # Build Summary (always runs)
+  # Build Summary
   # ====================
   build-summary:
     name: Build Summary
@@ -273,16 +225,18 @@ jobs:
     steps:
       - name: Summary
         run: |
-          echo "## ✅ Build Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "## ✅ Build & Push Complete!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🐳 Docker Images Pushed to GHCR:" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/${{ github.repository }}/backend:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/${{ github.repository }}/frontend:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "### 🐳 Docker Images Published to GHCR:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🚀 To Deploy:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Set up Railway project (see docs/DEPLOYMENT.md)" >> $GITHUB_STEP_SUMMARY
-          echo "2. Add \`RAILWAY_TOKEN\` secret to GitHub" >> $GITHUB_STEP_SUMMARY
-          echo "3. Add \`ENABLE_RAILWAY_DEPLOY=true\` variable to GitHub" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Image |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | \`ghcr.io/${{ github.repository }}/backend:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | \`ghcr.io/${{ github.repository }}/frontend:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚂 Railway Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Railway auto-deploys when connected to this repo. See [docs/DEPLOYMENT.md](../blob/main/docs/DEPLOYMENT.md) for setup." >> $GITHUB_STEP_SUMMARY
