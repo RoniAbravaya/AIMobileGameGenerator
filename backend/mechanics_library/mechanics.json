@@ -1,0 +1,224 @@
+{
+  "mechanics": [
+    {
+      "name": "tap_jump",
+      "source_url": "https://examples.flame-engine.org/#/Platformer",
+      "flame_example": "platformer",
+      "genre_tags": ["platformer", "action", "casual"],
+      "input_model": "tap",
+      "complexity": 1,
+      "description": "Tap anywhere to make character jump. Simple single-action input.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "lane_switch",
+      "source_url": "https://examples.flame-engine.org/#/Endless_Runner",
+      "flame_example": "endless_runner",
+      "genre_tags": ["runner", "action", "casual"],
+      "input_model": "swipe",
+      "complexity": 2,
+      "description": "Swipe left/right to change lanes. Common in endless runners.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "drag_aim",
+      "source_url": "https://examples.flame-engine.org/#/Drag_Events",
+      "flame_example": "drag_events",
+      "genre_tags": ["shooter", "puzzle", "casual"],
+      "input_model": "drag",
+      "complexity": 2,
+      "description": "Drag to aim projectile or object. Release to launch.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "tile_swap",
+      "source_url": "https://examples.flame-engine.org/#/Tap_Events",
+      "flame_example": "tap_events",
+      "genre_tags": ["puzzle", "casual"],
+      "input_model": "tap",
+      "complexity": 1,
+      "description": "Tap tiles to swap positions. Used in match-3 and sliding puzzles.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "joystick_control",
+      "source_url": "https://examples.flame-engine.org/#/Joystick",
+      "flame_example": "joystick",
+      "genre_tags": ["shooter", "action", "platformer"],
+      "input_model": "joystick",
+      "complexity": 3,
+      "description": "Virtual joystick for 360-degree movement control.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "physics_gravity",
+      "source_url": "https://examples.flame-engine.org/#/Forge2D_Basics",
+      "flame_example": "forge2d_basics",
+      "genre_tags": ["puzzle", "physics", "casual"],
+      "input_model": "tap",
+      "complexity": 3,
+      "description": "Objects affected by gravity. Tap to spawn or interact.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "collision_detection",
+      "source_url": "https://examples.flame-engine.org/#/Collision_Detection",
+      "flame_example": "collision_detection",
+      "genre_tags": ["platformer", "shooter", "action"],
+      "input_model": "tap",
+      "complexity": 2,
+      "description": "Detect collisions between sprites for damage, collection, etc.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "particle_effects",
+      "source_url": "https://examples.flame-engine.org/#/Particles",
+      "flame_example": "particles",
+      "genre_tags": ["action", "casual", "shooter"],
+      "input_model": "tap",
+      "complexity": 2,
+      "description": "Particle effects for explosions, trails, impacts.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "sprite_animation",
+      "source_url": "https://examples.flame-engine.org/#/Sprite_Sheet",
+      "flame_example": "sprite_sheet",
+      "genre_tags": ["platformer", "runner", "action", "casual"],
+      "input_model": "tap",
+      "complexity": 1,
+      "description": "Animated sprites for characters, enemies, objects.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "camera_follow",
+      "source_url": "https://examples.flame-engine.org/#/Camera_and_Viewport",
+      "flame_example": "camera_viewport",
+      "genre_tags": ["platformer", "runner", "shooter"],
+      "input_model": "tap",
+      "complexity": 2,
+      "description": "Camera follows player through level.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "tilt_control",
+      "source_url": "https://examples.flame-engine.org/#/Sensors",
+      "flame_example": "sensors",
+      "genre_tags": ["casual", "puzzle", "action"],
+      "input_model": "tilt",
+      "complexity": 4,
+      "description": "Use device accelerometer for movement control.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "multi_touch",
+      "source_url": "https://examples.flame-engine.org/#/Multi_Touch",
+      "flame_example": "multi_touch",
+      "genre_tags": ["action", "puzzle"],
+      "input_model": "multi_touch",
+      "complexity": 5,
+      "description": "Multiple simultaneous touch inputs.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "path_following",
+      "source_url": "https://examples.flame-engine.org/#/Effects",
+      "flame_example": "effects",
+      "genre_tags": ["puzzle", "casual", "action"],
+      "input_model": "drag",
+      "complexity": 3,
+      "description": "Objects follow drawn or predefined paths.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "text_input",
+      "source_url": "https://examples.flame-engine.org/#/Text_Rendering",
+      "flame_example": "text_rendering",
+      "genre_tags": ["puzzle", "word"],
+      "input_model": "tap",
+      "complexity": 2,
+      "description": "Text display and input for word games.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "card_flip",
+      "source_url": "https://examples.flame-engine.org/#/Flip_Card",
+      "flame_example": "flip_card",
+      "genre_tags": ["card", "puzzle", "casual"],
+      "input_model": "tap",
+      "complexity": 2,
+      "description": "Flip cards to reveal content. Memory matching games.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "timer_countdown",
+      "source_url": "https://examples.flame-engine.org/#/Timer",
+      "flame_example": "timer",
+      "genre_tags": ["puzzle", "action", "casual"],
+      "input_model": "tap",
+      "complexity": 1,
+      "description": "Countdown timer for time-limited levels.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "parallax_scrolling",
+      "source_url": "https://examples.flame-engine.org/#/Parallax",
+      "flame_example": "parallax",
+      "genre_tags": ["platformer", "runner", "shooter"],
+      "input_model": "tap",
+      "complexity": 2,
+      "description": "Multi-layer background scrolling for depth effect.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "spawner",
+      "source_url": "https://examples.flame-engine.org/#/Spawn_Component",
+      "flame_example": "spawn_component",
+      "genre_tags": ["shooter", "runner", "action"],
+      "input_model": "tap",
+      "complexity": 2,
+      "description": "Spawn enemies, obstacles, or items at intervals.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "score_system",
+      "source_url": "https://examples.flame-engine.org/#/",
+      "flame_example": "general",
+      "genre_tags": ["platformer", "runner", "puzzle", "shooter", "casual"],
+      "input_model": "tap",
+      "complexity": 1,
+      "description": "Track and display player score.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    },
+    {
+      "name": "health_system",
+      "source_url": "https://examples.flame-engine.org/#/",
+      "flame_example": "general",
+      "genre_tags": ["platformer", "shooter", "action"],
+      "input_model": "tap",
+      "complexity": 2,
+      "description": "Player health/lives system with damage and healing.",
+      "compatible_with_ads": true,
+      "compatible_with_levels": true
+    }
+  ]
+}

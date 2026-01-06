@@ -20,11 +20,23 @@ async def seed_mechanics():
     from sqlalchemy import select
 
     # Load mechanics from JSON
-    # Path: /app/app/db/seed.py -> go 3 levels up to /app, then mechanics_library
-    mechanics_file = Path(__file__).parent.parent.parent / "mechanics_library" / "mechanics.json"
+    # Try multiple paths for flexibility (Docker vs local dev)
+    possible_paths = [
+        Path("/app/mechanics_library/mechanics.json"),  # Absolute path in Docker
+        Path(__file__).parent.parent.parent / "mechanics_library" / "mechanics.json",  # Relative from app
+        Path(__file__).parent.parent.parent.parent / "mechanics_library" / "mechanics.json",  # Local dev
+    ]
     
-    if not mechanics_file.exists():
-        logger.warning("mechanics_file_not_found", path=str(mechanics_file))
+    mechanics_file = None
+    for path in possible_paths:
+        logger.debug("checking_mechanics_path", path=str(path), exists=path.exists())
+        if path.exists():
+            mechanics_file = path
+            logger.info("mechanics_file_found", path=str(path))
+            break
+    
+    if not mechanics_file:
+        logger.warning("mechanics_file_not_found", checked_paths=[str(p) for p in possible_paths])
         return
 
     with open(mechanics_file) as f:
