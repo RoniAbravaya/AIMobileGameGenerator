@@ -20,7 +20,8 @@ async def seed_mechanics():
     from sqlalchemy import select
 
     # Load mechanics from JSON
-    mechanics_file = Path(__file__).parent.parent.parent.parent / "mechanics_library" / "mechanics.json"
+    # Path: /app/app/db/seed.py -> go 3 levels up to /app, then mechanics_library
+    mechanics_file = Path(__file__).parent.parent.parent / "mechanics_library" / "mechanics.json"
     
     if not mechanics_file.exists():
         logger.warning("mechanics_file_not_found", path=str(mechanics_file))

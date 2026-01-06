@@ -8,7 +8,7 @@ environment variable handling.
 from functools import lru_cache
 from typing import List, Optional
 
-from pydantic import Field, PostgresDsn, RedisDsn
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,15 +35,27 @@ class Settings(BaseSettings):
         description="Allowed CORS origins"
     )
 
-    # Database
-    database_url: PostgresDsn = Field(
+    # Database - accept string and convert to asyncpg format
+    database_url: str = Field(
         default="postgresql+asyncpg://gamefactory:gamefactory@localhost:5432/gamefactory"
     )
     database_pool_size: int = 5
     database_max_overflow: int = 10
 
-    # Redis
-    redis_url: RedisDsn = Field(default="redis://localhost:6379/0")
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def convert_database_url(cls, v: str) -> str:
+        """Convert postgresql:// to postgresql+asyncpg:// for async support."""
+        if v and isinstance(v, str):
+            # Railway provides postgresql:// but we need postgresql+asyncpg://
+            if v.startswith("postgresql://") and "+asyncpg" not in v:
+                v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif v.startswith("postgres://"):
+                v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        return v
+
+    # Redis - accept string format
+    redis_url: str = Field(default="redis://localhost:6379/0")
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/1"
 
