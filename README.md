@@ -171,6 +171,48 @@ rewarded_ad_failed, level_unlocked
 | Ads | Google Mobile Ads |
 | Analytics | Firebase Analytics |
 | CI/CD | GitHub Actions |
+| Deployment | Railway / Docker |
+
+## ☁️ Cloud Deployment
+
+GameFactory supports automated deployment to Railway via GitHub Actions.
+
+### Quick Deploy to Railway
+
+1. **Fork this repository** to your GitHub account
+
+2. **Create a Railway project** at [railway.app](https://railway.app)
+   - Add PostgreSQL and Redis plugins
+   - Create services for backend, celery-worker, celery-beat, and frontend
+
+3. **Set up GitHub Secrets**:
+   ```
+   RAILWAY_TOKEN=<your-railway-api-token>
+   ```
+
+4. **Configure Railway Environment Variables**:
+   ```
+   ANTHROPIC_API_KEY=sk-ant-...     # Required: Claude AI
+   OPENAI_API_KEY=sk-...            # Recommended: DALL-E assets
+   GITHUB_TOKEN=ghp_...             # Required: Game repo creation
+   GITHUB_ORG=your-org              # Required: Your GitHub org/username
+   ```
+
+5. **Push to main** - GitHub Actions will:
+   - Run tests
+   - Build Docker images
+   - Push to GitHub Container Registry
+   - Deploy to Railway
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed instructions.
+
+### Docker Images
+
+Production images are available at:
+```
+ghcr.io/<owner>/<repo>/backend:latest
+ghcr.io/<owner>/<repo>/frontend:latest
+```
 
 ## 📝 License
 
