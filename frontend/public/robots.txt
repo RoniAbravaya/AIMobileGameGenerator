@@ -1,0 +1,5 @@
+# GameFactory Robots.txt
+User-agent: *
+Allow: /
+
+Sitemap: https://gamefactory.example.com/sitemap.xml
