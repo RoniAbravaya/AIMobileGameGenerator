@@ -57,16 +57,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configure CORS - allow all origins in production for Railway
-# In production, Railway domains are dynamic (*.up.railway.app)
-cors_origins = settings.cors_origins
-if settings.environment == "production":
-    # Allow all origins in production (Railway domains are dynamic)
-    cors_origins = ["*"]
-
+# Configure CORS - allow all origins for Railway deployment
+# Railway domains are dynamic (*.up.railway.app)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
