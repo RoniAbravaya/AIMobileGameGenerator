@@ -58,11 +58,11 @@ app = FastAPI(
 )
 
 # Configure CORS - allow all origins for Railway deployment
-# Railway domains are dynamic (*.up.railway.app)
+# Note: allow_credentials=False is required when using allow_origins=["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins
-    allow_credentials=True,
+    allow_credentials=False,  # Must be False when using wildcard origins
     allow_methods=["*"],
     allow_headers=["*"],
 )
