@@ -122,12 +122,22 @@ export default function NewBatchPage() {
               min="1"
               max="50"
               value={gameCount}
-              onChange={(e) => setGameCount(parseInt(e.target.value))}
+              onChange={(e) => setGameCount(parseInt(e.target.value, 10))}
               className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
             />
-            <span className="w-12 text-center font-semibold text-gray-900 bg-gray-100 px-3 py-1 rounded">
-              {gameCount}
-            </span>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={gameCount}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10)
+                if (val >= 1 && val <= 50) {
+                  setGameCount(val)
+                }
+              }}
+              className="w-16 text-center font-semibold text-gray-900 border border-gray-300 rounded px-2 py-1"
+            />
           </div>
           <p className="mt-1 text-sm text-gray-500">
             Each game will be generated through the 12-step pipeline
