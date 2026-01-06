@@ -30,7 +30,10 @@ class Settings(BaseSettings):
 
     # API
     api_v1_prefix: str = "/api/v1"
-    cors_origins: List[str] = ["http://localhost:3000"]
+    cors_origins: List[str] = Field(
+        default=["http://localhost:3000", "https://*.up.railway.app"],
+        description="Allowed CORS origins"
+    )
 
     # Database
     database_url: PostgresDsn = Field(
