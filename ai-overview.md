@@ -284,6 +284,34 @@ DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
 ```
 
+## Cloud Deployment
+
+GameFactory includes a complete CI/CD pipeline for cloud deployment:
+
+### GitHub Actions Workflow (`.github/workflows/ci-cd.yml`)
+- **On Push/PR**: Runs backend tests (pytest) and frontend tests (lint, type-check, build)
+- **On Push to main**: Builds Docker images and pushes to GitHub Container Registry
+- **Deploy**: Automatically deploys to Railway
+
+### Railway Configuration
+- Multi-service deployment: backend, celery-worker, celery-beat, frontend
+- PostgreSQL and Redis as managed plugins
+- Environment variables for API keys and secrets
+
+### Required Secrets
+```bash
+# GitHub Actions Secrets
+RAILWAY_TOKEN=<railway-api-token>
+
+# Railway Environment Variables  
+ANTHROPIC_API_KEY=sk-ant-...    # Claude AI (primary)
+OPENAI_API_KEY=sk-...           # DALL-E + fallback
+GITHUB_TOKEN=ghp_...            # Game repo creation
+GITHUB_ORG=your-org             # GitHub organization
+```
+
+See `docs/DEPLOYMENT.md` for complete setup instructions.
+
 ## Future Enhancements
 
 - [x] ~~Full Flutter code generation for Steps 1-3~~ ✅ Implemented
@@ -291,6 +319,7 @@ REDIS_URL=redis://...
 - [x] ~~AI asset generation pipeline~~ ✅ Implemented
 - [x] ~~Steps 4-6: Analytics design, implementation, core prototype~~ ✅ Implemented
 - [x] ~~Steps 8-12: Vertical slice through post-launch~~ ✅ Implemented
+- [x] ~~CI/CD Pipeline with Railway deployment~~ ✅ Implemented
 - [ ] iOS support (currently Android-only)
 - [ ] Cloud sync for unlock state
 - [ ] A/B testing framework
