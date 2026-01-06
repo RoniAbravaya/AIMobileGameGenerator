@@ -69,6 +69,11 @@ class Settings(BaseSettings):
     claude_model: str = "claude-3-haiku-20240307"  # Default Claude model (using Haiku as Sonnet not available)
     openai_api_key: Optional[str] = None  # Fallback AI provider
     ai_model: str = "gpt-4-turbo-preview"  # Fallback model for OpenAI
+    
+    # AI Generation Settings
+    ai_generation_required: bool = True  # If True, fail if AI unavailable (no fallback to templates)
+    ai_generation_retries: int = 3  # Number of retries for AI API calls before giving up
+    ai_allow_template_fallback: bool = False  # If True, allow template fallback when AI fails (dev only)
 
     # Firebase
     firebase_project_id: Optional[str] = None

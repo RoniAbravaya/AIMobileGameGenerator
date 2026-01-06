@@ -137,12 +137,15 @@ See `docs/SIMILARITY_CHECK.md` for complete documentation.
 ### AIService (`backend/app/services/ai_service.py`) ✅ Claude AI Primary
 - **Primary Provider**: Anthropic Claude (claude-3-5-sonnet by default)
 - **Fallback Provider**: OpenAI GPT-4 (if configured)
+- **AI is REQUIRED**: GDD generation fails if no AI provider configured (by default)
+- **Retry Mechanism**: Automatic retries with exponential backoff for transient failures
 - GDD generation with structured JSON output
 - Dart/Flutter code generation
 - Level configuration generation
 - Asset prompt generation for DALL-E
 - Automatic fallback between providers
 - Configurable Claude model (opus/sonnet/haiku)
+- **Template Fallback**: Only enabled via `AI_ALLOW_TEMPLATE_FALLBACK=true` (dev/testing only)
 
 ### GitHubService (`backend/app/services/github_service.py`) ✅ NEW
 - Full repository creation via GitHub API
@@ -252,7 +255,7 @@ docker-compose exec backend python -m app.db.seed
 
 | Step | Name | Status | Description |
 |------|------|--------|-------------|
-| 1 | Pre-Production | ✅ Full | AI-powered GDD generation with similarity checking |
+| 1 | Pre-Production | ✅ Full | AI-powered GDD generation (REQUIRED) with similarity checking |
 | 2 | Project Setup | ✅ Full | Real GitHub repo creation, template cloning |
 | 3 | Architecture | ✅ Full | AI code generation, GitHub commits |
 | 4 | Analytics Design | ✅ Full | Event specification, funnels, documentation |
@@ -268,12 +271,17 @@ docker-compose exec backend python -m app.db.seed
 ## Required Environment Variables
 
 ```bash
-# AI Services - Claude AI is PRIMARY
-ANTHROPIC_API_KEY=sk-ant-... # Primary AI provider (required)
+# AI Services - Claude AI is PRIMARY (REQUIRED)
+ANTHROPIC_API_KEY=sk-ant-... # Primary AI provider (required for game generation)
 CLAUDE_MODEL=claude-3-5-sonnet-20241022  # Optional: claude-3-opus, claude-3-haiku
 
 # OpenAI - Optional fallback and DALL-E image generation
 OPENAI_API_KEY=sk-...        # For DALL-E asset generation and fallback
+
+# AI Generation Settings
+AI_GENERATION_REQUIRED=true  # Default: true - fail if no AI configured
+AI_GENERATION_RETRIES=3      # Retry count for transient API failures
+AI_ALLOW_TEMPLATE_FALLBACK=false  # Set to true for dev/testing only
 
 # GitHub (required for repo creation)
 GITHUB_TOKEN=ghp_...         # Personal Access Token with repo scope
