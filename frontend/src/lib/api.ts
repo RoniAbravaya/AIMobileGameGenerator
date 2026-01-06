@@ -71,12 +71,15 @@ export const api = {
     genre_mix: string[]
     constraints?: Record<string, unknown>
   }): Promise<Batch> {
-    const response = await client.post('/batches', {
+    const payload = {
       name: data.name,
       game_count: data.count,
       genre_mix: data.genre_mix,
       constraints: data.constraints,
-    })
+    }
+    console.log('[API] Creating batch with payload:', payload)
+    const response = await client.post('/batches', payload)
+    console.log('[API] Batch created:', response.data)
     return response.data
   },
 

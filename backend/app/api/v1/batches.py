@@ -35,6 +35,15 @@ async def create_batch(
     - **genre_mix**: List of genres to include
     - **constraints**: Optional constraints from learning loop
     """
+    import structlog
+    logger = structlog.get_logger()
+    logger.info(
+        "create_batch_request",
+        game_count=batch_data.game_count,
+        genre_mix=batch_data.genre_mix,
+        name=batch_data.name,
+    )
+    
     service = BatchService(db)
     batch = await service.create_batch(batch_data)
     return BatchStatus.model_validate(batch)

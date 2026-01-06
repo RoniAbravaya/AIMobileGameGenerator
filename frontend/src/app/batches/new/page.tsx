@@ -61,6 +61,8 @@ export default function NewBatchPage() {
       return
     }
 
+    console.log('[NewBatch] Submitting with gameCount:', gameCount)
+    
     createBatch.mutate({
       name: name || undefined,
       count: gameCount,
