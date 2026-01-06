@@ -14,6 +14,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# But allow frontend lib
+!frontend/src/lib/
 parts/
 sdist/
 var/
@@ -100,3 +102,4 @@ alembic/versions/*.pyc
 *.tmp
 *.temp
 .cache/
+*.tsbuildinfo

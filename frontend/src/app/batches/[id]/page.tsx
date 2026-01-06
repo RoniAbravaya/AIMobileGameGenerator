@@ -41,9 +41,9 @@ export default function BatchDetailPage() {
   const { data: batch, isLoading, error } = useQuery({
     queryKey: ['batch', batchId],
     queryFn: () => api.getBatch(batchId),
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
       // Auto-refresh while batch is running
-      if (data?.status === 'running') return 5000
+      if (query.state.data?.status === 'running') return 5000
       return false
     },
   })

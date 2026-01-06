@@ -34,12 +34,12 @@ export default function NewBatchPage() {
   const createBatch = useMutation({
     mutationFn: (data: { name?: string; count: number; genre_mix: string[] }) =>
       api.createBatch(data),
-    onSuccess: (batch) => {
+    onSuccess: (batch: { id: string }) => {
       queryClient.invalidateQueries({ queryKey: ['batches'] })
       queryClient.invalidateQueries({ queryKey: ['batches-all'] })
       router.push(`/batches/${batch.id}`)
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       setError(err.message || 'Failed to create batch')
     },
   })
