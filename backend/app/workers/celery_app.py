@@ -4,14 +4,25 @@ Celery Application Configuration
 Configures Celery with Redis broker and result backend.
 """
 
+import os
 from celery import Celery
 
 from app.core.config import settings
 
+# Debug: Print environment variables for troubleshooting
+print("=" * 60)
+print("CELERY CONFIGURATION DEBUG")
+print("=" * 60)
+print(f"CELERY_BROKER_URL env: {os.environ.get('CELERY_BROKER_URL', 'NOT SET')[:50]}...")
+print(f"REDIS_URL env: {os.environ.get('REDIS_URL', 'NOT SET')[:50]}...")
+print(f"settings.celery_broker_url: {str(settings.celery_broker_url)[:50]}...")
+print(f"settings.celery_result_backend: {str(settings.celery_result_backend)[:50]}...")
+print("=" * 60)
+
 celery_app = Celery(
     "gamefactory",
-    broker=settings.celery_broker_url,
-    backend=settings.celery_result_backend,
+    broker=str(settings.celery_broker_url),
+    backend=str(settings.celery_result_backend),
     include=[
         "app.workers.tasks",
         "app.workers.step_executors",
