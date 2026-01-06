@@ -202,43 +202,46 @@ export default function GameDetailPage() {
       </div>
 
       {/* GDD Summary */}
-      {game.gdd_spec && Object.keys(game.gdd_spec).length > 0 && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Game Design Document</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {game.gdd_spec.name && (
-              <div>
-                <p className="text-sm text-gray-500">Name</p>
-                <p className="font-medium">{game.gdd_spec.name as string}</p>
-              </div>
-            )}
-            {game.gdd_spec.genre && (
-              <div>
-                <p className="text-sm text-gray-500">Genre</p>
-                <p className="font-medium">{game.gdd_spec.genre as string}</p>
-              </div>
-            )}
-            {game.gdd_spec.art_style && (
-              <div>
-                <p className="text-sm text-gray-500">Art Style</p>
-                <p className="font-medium">{game.gdd_spec.art_style as string}</p>
-              </div>
-            )}
-            {game.gdd_spec.session_length && (
-              <div>
-                <p className="text-sm text-gray-500">Session Length</p>
-                <p className="font-medium">{game.gdd_spec.session_length as string}</p>
+      {game.gdd_spec && Object.keys(game.gdd_spec).length > 0 && (() => {
+        const gdd = game.gdd_spec as Record<string, string | number | boolean | null>
+        return (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Game Design Document</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {gdd.name && (
+                <div>
+                  <p className="text-sm text-gray-500">Name</p>
+                  <p className="font-medium">{String(gdd.name)}</p>
+                </div>
+              )}
+              {gdd.genre && (
+                <div>
+                  <p className="text-sm text-gray-500">Genre</p>
+                  <p className="font-medium">{String(gdd.genre)}</p>
+                </div>
+              )}
+              {gdd.art_style && (
+                <div>
+                  <p className="text-sm text-gray-500">Art Style</p>
+                  <p className="font-medium">{String(gdd.art_style)}</p>
+                </div>
+              )}
+              {gdd.session_length && (
+                <div>
+                  <p className="text-sm text-gray-500">Session Length</p>
+                  <p className="font-medium">{String(gdd.session_length)}</p>
+                </div>
+              )}
+            </div>
+            {gdd.description && (
+              <div className="mt-4">
+                <p className="text-sm text-gray-500">Description</p>
+                <p className="text-gray-700">{String(gdd.description)}</p>
               </div>
             )}
           </div>
-          {game.gdd_spec.description && (
-            <div className="mt-4">
-              <p className="text-sm text-gray-500">Description</p>
-              <p className="text-gray-700">{game.gdd_spec.description as string}</p>
-            </div>
-          )}
-        </div>
-      )}
+        )
+      })()}
 
       {/* Steps Progress */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
