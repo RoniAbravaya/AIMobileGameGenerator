@@ -1,4 +1,5 @@
 # GameFactory Backend Dependencies
+# Version: 2026-01-07-v2 (force rebuild for step_07 fix)
 # FastAPI and server
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
