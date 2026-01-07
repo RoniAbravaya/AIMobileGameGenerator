@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1010217553424",
+    "project_id": "gamefactory-bd9ae",
+    "storage_bucket": "gamefactory-bd9ae.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1010217553424:android:b694fe36c9a8c96756c495",
+        "android_client_info": {
+          "package_name": "com.gamefactory"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBkpoUUDv-c6vV1MS4bNe2YuWaXAzqHKQY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
