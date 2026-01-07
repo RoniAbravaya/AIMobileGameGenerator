@@ -196,11 +196,24 @@ class GameService:
             )
             return None
 
+        # Reset step state
         step.status = "pending"
         step.retry_count += 1
         step.error_message = None
         step.started_at = None
         step.completed_at = None
+
+        # Also update game status back to in_progress if it was failed
+        game = await self.get_game(game_id)
+        if game and game.status == "failed":
+            game.status = "in_progress"
+            game.updated_at = datetime.utcnow()
+            logger.info(
+                "game_status_reset_for_retry",
+                game_id=str(game_id),
+                from_status="failed",
+                to_status="in_progress",
+            )
 
         await self.db.commit()
 

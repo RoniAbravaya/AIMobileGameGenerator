@@ -121,6 +121,24 @@ export const api = {
     return response.data
   },
 
+  /**
+   * Retry a failed step for a game
+   */
+  async retryStep(gameId: string, stepNumber: number, force: boolean = false): Promise<unknown> {
+    const response = await client.post(`/games/${gameId}/steps/${stepNumber}/retry`, {
+      force,
+    })
+    return response.data
+  },
+
+  /**
+   * Cancel a game generation
+   */
+  async cancelGame(gameId: string): Promise<Game> {
+    const response = await client.post(`/games/${gameId}/cancel`)
+    return response.data
+  },
+
   // ==================
   // Mechanics
   // ==================

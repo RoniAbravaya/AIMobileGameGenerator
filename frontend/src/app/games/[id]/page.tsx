@@ -4,9 +4,10 @@
  * Game Detail Page
  * 
  * Shows game details, step progress, and logs for monitoring generation.
+ * Includes retry functionality for failed steps.
  */
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, LogEntry } from '@/lib/api'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -23,7 +24,8 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronRight,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -90,6 +92,8 @@ export default function GameDetailPage() {
   const params = useParams()
   const gameId = params.id as string
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set())
+  const [retryingStep, setRetryingStep] = useState<number | null>(null)
+  const queryClient = useQueryClient()
 
   const { data: game, isLoading, error } = useQuery<Game>({
     queryKey: ['game', gameId],
@@ -101,6 +105,33 @@ export default function GameDetailPage() {
       return false
     },
   })
+
+  // Mutation for retrying a step
+  const retryMutation = useMutation({
+    mutationFn: ({ stepNumber, force }: { stepNumber: number; force: boolean }) =>
+      api.retryStep(gameId, stepNumber, force),
+    onMutate: ({ stepNumber }) => {
+      setRetryingStep(stepNumber)
+    },
+    onSuccess: () => {
+      // Invalidate and refetch game data
+      queryClient.invalidateQueries({ queryKey: ['game', gameId] })
+      queryClient.invalidateQueries({ queryKey: ['game-logs', gameId] })
+    },
+    onError: (error) => {
+      console.error('Retry failed:', error)
+    },
+    onSettled: () => {
+      setRetryingStep(null)
+    },
+  })
+
+  const handleRetryStep = (stepNumber: number, force: boolean = false) => {
+    retryMutation.mutate({ stepNumber, force })
+  }
+
+  // Find the failed step
+  const failedStep = game?.steps?.find(s => s.status === 'failed')
 
   // Fetch logs for this game
   const { data: logs } = useQuery<LogEntry[]>({
@@ -178,18 +209,41 @@ export default function GameDetailPage() {
           </div>
         </div>
 
-        {game.github_repo_url && (
-          <a
-            href={game.github_repo_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center px-4 py-2 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            <Github className="h-5 w-5 mr-2" />
-            View on GitHub
-            <ExternalLink className="h-4 w-4 ml-2" />
-          </a>
-        )}
+        <div className="flex items-center space-x-3">
+          {/* Retry Failed Step Button */}
+          {game.status === 'failed' && failedStep && (
+            <button
+              onClick={() => handleRetryStep(failedStep.step_number, true)}
+              disabled={retryMutation.isPending}
+              className={clsx(
+                'inline-flex items-center px-4 py-2 font-medium rounded-lg transition-colors',
+                retryMutation.isPending
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-orange-600 text-white hover:bg-orange-700'
+              )}
+            >
+              {retryMutation.isPending ? (
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+              ) : (
+                <RotateCcw className="h-5 w-5 mr-2" />
+              )}
+              Retry Step {failedStep.step_number}
+            </button>
+          )}
+
+          {game.github_repo_url && (
+            <a
+              href={game.github_repo_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-4 py-2 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              <Github className="h-5 w-5 mr-2" />
+              View on GitHub
+              <ExternalLink className="h-4 w-4 ml-2" />
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Progress Bar */}
@@ -212,6 +266,50 @@ export default function GameDetailPage() {
           />
         </div>
       </div>
+
+      {/* Retry Status Banner */}
+      {retryMutation.isPending && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center space-x-3">
+          <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+          <span className="text-blue-800">
+            Retrying step {retryingStep}... The step will be queued for execution.
+          </span>
+        </div>
+      )}
+
+      {retryMutation.isError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <XCircle className="h-5 w-5 text-red-500" />
+            <span className="text-red-800">
+              Failed to retry step: {retryMutation.error?.message || 'Unknown error'}
+            </span>
+          </div>
+          <button
+            onClick={() => retryMutation.reset()}
+            className="text-red-600 hover:text-red-800 text-sm font-medium"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {retryMutation.isSuccess && !retryMutation.isPending && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <CheckCircle2 className="h-5 w-5 text-green-500" />
+            <span className="text-green-800">
+              Step retry has been triggered! Watch the logs below for progress.
+            </span>
+          </div>
+          <button
+            onClick={() => retryMutation.reset()}
+            className="text-green-600 hover:text-green-800 text-sm font-medium"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* GDD Summary */}
       {game.gdd_spec && Object.keys(game.gdd_spec).length > 0 && (() => {
@@ -322,6 +420,35 @@ export default function GameDetailPage() {
                 {/* Expanded Step Details */}
                 {step && isExpanded && (
                   <div className="px-6 pb-4 space-y-4">
+                    {/* Retry Button for Failed Step */}
+                    {step.status === 'failed' && (
+                      <div className="flex items-center justify-between bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="flex items-center space-x-3">
+                          <AlertTriangle className="h-5 w-5 text-red-500" />
+                          <span className="text-red-800 font-medium">
+                            This step failed. You can retry it to continue the generation.
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handleRetryStep(step.step_number, true)}
+                          disabled={retryMutation.isPending && retryingStep === step.step_number}
+                          className={clsx(
+                            'inline-flex items-center px-4 py-2 font-medium rounded-lg transition-colors',
+                            retryMutation.isPending && retryingStep === step.step_number
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-red-600 text-white hover:bg-red-700'
+                          )}
+                        >
+                          {retryMutation.isPending && retryingStep === step.step_number ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-4 w-4 mr-2" />
+                          )}
+                          Retry Step
+                        </button>
+                      </div>
+                    )}
+
                     {/* Error Message */}
                     {step.error_message && (
                       <div className="bg-red-100 border border-red-200 rounded-lg p-4">
