@@ -60,8 +60,8 @@ class AIService:
     def __init__(self):
         self.anthropic_client: Optional[AsyncAnthropic] = None
         self.openai_client: Optional[AsyncOpenAI] = None
-        # Use model from settings, or default to claude-3-5-sonnet-latest
-        self.primary_model: str = getattr(settings, 'claude_model', None) or "claude-3-5-sonnet-latest"
+        # Use model from settings, or default to Claude Sonnet 4
+        self.primary_model: str = getattr(settings, 'claude_model', None) or "claude-sonnet-4-20250514"
         self._initialize_clients()
 
     def _initialize_clients(self):

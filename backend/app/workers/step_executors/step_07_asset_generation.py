@@ -93,15 +93,15 @@ class AssetGenerationStep(BaseStepExecutor):
                 db_asset = GameAsset(
                     game_id=game.id,
                     asset_type=asset["type"],
-                    name=asset["name"],
-                    file_path=asset["path"],
-                    file_size=self._get_file_size(asset["path"]),
+                    filename=asset["name"],
+                    local_path=asset["path"],
                     width=asset["size"][0],
                     height=asset["size"][1],
                     ai_prompt=asset.get("prompt"),
-                    metadata={
+                    asset_metadata={
                         "frames": asset.get("frames", 1),
                         "sprite_sheet": asset.get("sprite_sheet"),
+                        "file_size": self._get_file_size(asset["path"]),
                     },
                 )
                 db.add(db_asset)
