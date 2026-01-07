@@ -1,5 +1,5 @@
 """
-Step 7: AI Asset Generation
+Step 7: AI Asset Generation (v2 - field names fixed)
 
 Generates all visual and audio assets for the game using AI:
 - Sprites (player, enemies, obstacles, collectibles)
